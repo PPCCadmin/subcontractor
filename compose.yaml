@@ -1,0 +1,7 @@
+services:
+  subcontractor-app:
+    build: .
+    container_name: subcontractor-app
+    ports:
+      - "8080:80"
+    restart: unless-stopped

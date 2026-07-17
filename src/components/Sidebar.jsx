@@ -39,13 +39,14 @@ export default function Sidebar({
     const q = filters.jobQuery && filters.jobQuery.trim()
     if (!q) return
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`
+      const usViewbox = '-124.733253,49.384358,-66.949778,24.544091'
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&bounded=1&viewbox=${usViewbox}&q=${encodeURIComponent(q)}`
       const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
       const data = await res.json()
-      if (data && data[0]) {
+      if (data && data[0] && data[0].lat && data[0].lon) {
         setJobLocation({ lat: +data[0].lat, lng: +data[0].lon, label: data[0].display_name })
       } else {
-        alert('No results. Try a full address or city + state.')
+        alert('No US results found. Try a full address, city + state, or ZIP code within the United States.')
       }
     } catch (e) {
       alert('Geocoding failed. Please try again.')

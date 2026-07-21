@@ -4,16 +4,14 @@ import * as turf from '@turf/turf'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
-// Status -> pin color. Must include every key in data.js STATUSES.
 const STATUS_COLOR_EXPR = [
   'match', ['get', 'status'],
   'Vetted',      '#1a5c38',
-  'Recommended', '#0d9488',
+  'Recommended', '#ca8a04',
   'New',         '#2563eb',
   'DNU',         '#dc2626',
-  'Do Not Use',  '#dc2626',   // legacy alias
-  'Competitor',  '#b45309',
-  /* default (Unknown / null) */ '#8e8e93'
+  'Do Not Use',  '#dc2626',
+  /* default */  '#2563eb'
 ]
 
 export default function MapView({ subs, filteredIds, jobLocation, radius, selectedId, onSelect }) {
@@ -51,19 +49,6 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
       })
 
       map.addLayer({
-        id: 'subs-glow',
-        type: 'circle',
-        source: 'subs',
-        filter: ['==', ['get', 'topRated'], true],
-        paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 12, 8, 22, 14, 32],
-          'circle-color': '#ffb800',
-          'circle-opacity': 0.35,
-          'circle-blur': 0.6
-        }
-      })
-
-      map.addLayer({
         id: 'subs-selected-halo',
         type: 'circle',
         source: 'subs',
@@ -83,42 +68,22 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
         paint: {
           'circle-radius': [
             'interpolate', ['linear'], ['zoom'],
-            3, ['case',
-              ['boolean', ['feature-state', 'selected'], false], 10,
-              ['get', 'topRated'], 8,
-              5
-            ],
-            8, ['case',
-              ['boolean', ['feature-state', 'selected'], false], 14,
-              ['get', 'topRated'], 12,
-              8
-            ],
-            14, ['case',
-              ['boolean', ['feature-state', 'selected'], false], 20,
-              ['get', 'topRated'], 18,
-              12
-            ]
+            3, ['case', ['boolean', ['feature-state', 'selected'], false], 10, 5],
+            8, ['case', ['boolean', ['feature-state', 'selected'], false], 14, 8],
+            14, ['case', ['boolean', ['feature-state', 'selected'], false], 20, 12]
           ],
           'circle-color': STATUS_COLOR_EXPR,
           'circle-stroke-width': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false], 4,
-            ['get', 'topRated'], 3,
-            2
+            'case', ['boolean', ['feature-state', 'selected'], false], 4, 2
           ],
           'circle-stroke-color': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false], '#1a5c38',
-            ['get', 'topRated'], '#ffb800',
-            '#ffffff'
+            'case', ['boolean', ['feature-state', 'selected'], false], '#1a5c38', '#ffffff'
           ]
         }
       })
 
       map.on('click', 'subs-pin', (e) => {
-        if (e.features && e.features[0]) {
-          onSelect(e.features[0].properties.id)
-        }
+        if (e.features && e.features[0]) onSelect(e.features[0].properties.id)
       })
       map.on('mouseenter', 'subs-pin', () => { map.getCanvas().style.cursor = 'pointer' })
       map.on('mouseleave', 'subs-pin', () => { map.getCanvas().style.cursor = '' })
@@ -149,13 +114,7 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
         type: 'Feature',
         id: s._numericId,
         geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
-        properties: {
-          id: s.id,
-          status: s.status || 'Unknown',
-          topRated: (s.rating || 0) >= 5,
-          rating: s.rating || 0,
-          name: s.companyName
-        }
+        properties: { id: s.id, status: s.status || 'New', name: s.companyName }
       })
     }
     src.setData({ type: 'FeatureCollection', features })

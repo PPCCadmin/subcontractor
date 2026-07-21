@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { complianceStatus, daysUntil, subAvgRating } from '../lib/metrics.js'
+import { complianceStatus, daysUntil } from '../lib/metrics.js'
 
 function StatCard({ label, value, color, sub }) {
   return (
@@ -41,14 +41,6 @@ export default function Dashboard({ subs, projects, onOpenSub }) {
     return rows.sort((a,b) => a.days - b.days).slice(0, 50)
   }, [subs])
 
-  const topRated = useMemo(() => {
-    const scored = subs.map(s => ({ s, score: subAvgRating(s.id, projects) || s.rating || 0 }))
-      .filter(x => x.score >= 4)
-      .sort((a,b) => b.score - a.score)
-      .slice(0, 10)
-    return scored
-  }, [subs, projects])
-
   const topStates = Object.entries(stats.byState).sort((a,b) => b[1]-a[1]).slice(0, 8)
 
   return (
@@ -57,9 +49,10 @@ export default function Dashboard({ subs, projects, onOpenSub }) {
         <h3>Overview</h3>
         <div className="stat-grid">
           <StatCard label="Total Subcontractors" value={stats.total} />
-          <StatCard label="Vetted" value={stats.byStatus['Vetted'] || 0} color="#1a5c38" />
-          <StatCard label="Do Not Use" value={stats.byStatus['Do Not Use'] || 0} color="#dc2626" />
-          <StatCard label="Unknown / To Review" value={stats.byStatus['Unknown'] || 0} color="#6b7280" />
+          <StatCard label="Vetted"       value={stats.byStatus['Vetted']      || 0} color="#1a5c38" />
+          <StatCard label="Recommended"  value={stats.byStatus['Recommended'] || 0} color="#ca8a04" />
+          <StatCard label="New"          value={stats.byStatus['New']         || 0} color="#2563eb" />
+          <StatCard label="DNU"          value={stats.byStatus['DNU']         || 0} color="#dc2626" />
         </div>
       </div>
 
@@ -99,37 +92,18 @@ export default function Dashboard({ subs, projects, onOpenSub }) {
         )}
       </div>
 
-      <div className="dashboard-columns">
-        <div className="dashboard-section">
-          <h3>Top Performers</h3>
-          {topRated.length === 0 ? <div className="empty">No rated subs yet.</div> : (
-            <div className="top-list">
-              {topRated.map((x, i) => (
-                <div key={x.s.id} className="top-row" onClick={() => onOpenSub(x.s.id)}>
-                  <div className="top-rank">{i+1}</div>
-                  <div className="top-body">
-                    <div className="top-name">{x.s.companyName}</div>
-                    <div className="top-meta">{x.s.city}, {x.s.state}</div>
-                  </div>
-                  <div className="top-score">{x.score.toFixed(1)} <span style={{color:'#b45309'}}>★</span></div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="dashboard-section">
-          <h3>By State (top 8)</h3>
-          <div className="top-list">
-            {topStates.map(([st, n]) => (
-              <div key={st} className="top-row">
-                <div className="top-rank">{st}</div>
-                <div className="top-body"><div className="top-name">{n} subs</div></div>
-                <div className="top-score">
-                  <div className="bar" style={{ width: `${Math.min(100, n/stats.total*100 * 4)}%` }}></div>
-                </div>
+      <div className="dashboard-section">
+        <h3>By State (top 8)</h3>
+        <div className="top-list">
+          {topStates.map(([st, n]) => (
+            <div key={st} className="top-row">
+              <div className="top-rank">{st}</div>
+              <div className="top-body"><div className="top-name">{n} subs</div></div>
+              <div className="top-score">
+                <div className="bar" style={{ width: `${Math.min(100, n/stats.total*100 * 4)}%` }}></div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import {
   SERVICE_TAXONOMY, STATUSES
 } from '../data.js'
 import { CloseIcon, TrashIcon, UploadIcon, DownloadIcon, PhoneIcon, PlusIcon, WarningIcon } from './icons.jsx'
-import { subHitRate, subAvgRating, daysUntil } from '../lib/metrics.js'
+import { subHitRate, daysUntil } from '../lib/metrics.js'
 import * as turf from '@turf/turf'
 
 const TABS = ['Info', 'Contacts', 'Equipment', 'Licenses', 'Files', 'Metrics']
@@ -15,7 +15,6 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
   if (!sub) return null
 
   const patch = (p) => onChange({ ...sub, ...p })
-  const isTop = (sub.rating || 0) >= 5
 
   let distance = null
   if (jobLocation && sub.lat != null && sub.lng != null) {
@@ -23,22 +22,18 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
       turf.point([jobLocation.lng, jobLocation.lat]),
       turf.point([sub.lng, sub.lat]), { units: 'miles' })
   }
-  // Null-safe: some records may have no status
-  const statusKey = (sub.status || 'Unknown').replace(/\s+/g, '')
+  const statusKey = (sub.status || 'New').replace(/\s+/g, '')
 
   return (
-    <div className={'detail' + (isTop ? ' detail-top' : '')}>
+    <div className="detail">
       <div className="detail-header">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="detail-title">
-            {isTop && <span className="crown-lg" title="5-star sub">&#9733;</span>}
-            {sub.companyName}
-          </div>
+          <div className="detail-title">{sub.companyName}</div>
           <div className="detail-address">
             {[sub.address, sub.city, sub.state, sub.zip].filter(Boolean).join(', ')}
           </div>
           <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className={'pill pill-' + statusKey}>{sub.status || 'Unknown'}</span>
+            <span className={'pill pill-' + statusKey}>{sub.status || 'New'}</span>
             {distance != null && (
               <span className="pill pill-distance">{distance.toFixed(0)} mi from job</span>
             )}
@@ -102,17 +97,6 @@ function InfoTab({ sub, patch }) {
               <option value="">—</option>
               {BUSINESS_STRUCTURES.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
-          </div>
-        </div>
-        <div className="field">
-          <label>Rating</label>
-          <div className="stars-lg">
-            {[1,2,3,4,5].map(n => (
-              <span key={n}
-                    className={'star-lg' + ((sub.rating || 0) >= n ? ' on' : '')}
-                    onClick={() => patch({ rating: sub.rating === n ? null : n })}>&#9733;</span>
-            ))}
-            {sub.rating && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)' }}>{sub.rating}/5</span>}
           </div>
         </div>
       </div>
@@ -534,7 +518,6 @@ function FilesTab({ sub, patch }) {
 
 function MetricsTab({ sub, rfqs, projects }) {
   const hr = subHitRate(sub.id, rfqs)
-  const avg = subAvgRating(sub.id, projects)
   const subProjects = projects.filter(p => p.subId === sub.id)
     .sort((a,b) => (b.completionDate || '').localeCompare(a.completionDate || ''))
 
@@ -559,34 +542,24 @@ function MetricsTab({ sub, rfqs, projects }) {
             <div className="metric-num">{subProjects.length}</div>
             <div className="metric-lbl">Projects</div>
           </div>
-          <div className="metric-tile">
-            <div className="metric-num">{avg != null ? avg.toFixed(1) : '—'} <span style={{ color: '#b45309', fontSize: 16 }}>★</span></div>
-            <div className="metric-lbl">Avg Rating</div>
-          </div>
         </div>
       </div>
 
       {subProjects.length > 0 && (
         <div className="detail-section">
           <h4>Recent Projects</h4>
-          {subProjects.slice(0, 5).map(p => {
-            const r = p.rating || {}
-            const vals = [r.quality, r.schedule, r.safety, r.communication].filter(v => v != null)
-            const avgP = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : null
-            return (
-              <div key={p.id} className="list-item">
-                <div style={{ flex: 1 }}>
-                  <div className="li-name"><strong>{p.name}</strong></div>
-                  <div className="li-meta">
-                    {[p.city, p.state].filter(Boolean).join(', ')}
-                    {p.completionDate && ` · completed ${p.completionDate}`}
-                    {p.contractValue && ` · $${(+p.contractValue).toLocaleString()}`}
-                  </div>
+          {subProjects.slice(0, 5).map(p => (
+            <div key={p.id} className="list-item">
+              <div style={{ flex: 1 }}>
+                <div className="li-name"><strong>{p.name}</strong></div>
+                <div className="li-meta">
+                  {[p.city, p.state].filter(Boolean).join(', ')}
+                  {p.completionDate && ` · completed ${p.completionDate}`}
+                  {p.contractValue && ` · $${(+p.contractValue).toLocaleString()}`}
                 </div>
-                {avgP && <div style={{ fontWeight: 600 }}>{avgP} <span style={{ color: '#b45309' }}>★</span></div>}
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
       )}
     </>

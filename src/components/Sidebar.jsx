@@ -9,18 +9,6 @@ function StatusPill({ status }) {
   return <span className={cls}>{status}</span>
 }
 
-function StarRow({ rating, size = 12 }) {
-  const r = rating || 0
-  if (r === 0) return null
-  return (
-    <span className="star-row" style={{ fontSize: size }}>
-      {[1, 2, 3, 4, 5].map(n => (
-        <span key={n} className={n <= r ? 'star-filled' : 'star-empty'}>&#9733;</span>
-      ))}
-    </span>
-  )
-}
-
 export default function Sidebar({
   subs, filteredSubs, filters, setFilters, jobLocation, setJobLocation,
   radius, setRadius, selectedId, setSelectedId, onAdd, onImport
@@ -158,13 +146,6 @@ export default function Sidebar({
               {st.label}
             </div>
           ))}
-          <div
-            className={'chip chip-star' + (filters.topRatedOnly ? ' active' : '')}
-            onClick={() => setFilters({ ...filters, topRatedOnly: !filters.topRatedOnly })}
-            title="Show only 5-star rated subs"
-          >
-            &#9733; 5-star
-          </div>
         </div>
       </div>
 
@@ -173,38 +154,31 @@ export default function Sidebar({
         {jobLocation && ' · sorted by distance'}
       </div>
       <div className="list">
-        {sorted.slice(0, 300).map(s => {
-          const isTop = (s.rating || 0) >= 5
-          return (
-            <div
-              key={s.id}
-              className={'sub-card' + (s.id === selectedId ? ' selected' : '') + (isTop ? ' top-rated' : '')}
-              onClick={() => setSelectedId(s.id)}
-            >
-              <div className="sub-name-row">
-                <div className="sub-name">
-                  {isTop && <span className="crown" title="5-star sub">&#9733;</span>}
-                  {s.companyName}
-                </div>
-                {s._dist != null && s._dist !== Infinity && (
-                  <span className="sub-dist">{s._dist.toFixed(0)} mi</span>
-                )}
-              </div>
-              <div className="sub-meta">
-                <StatusPill status={s.status} />
-                {s.rating > 0 && s.rating < 5 && <StarRow rating={s.rating} />}
-                {s.city && <span className="sub-city">{s.city}, {s.state}</span>}
-              </div>
-              {s.canonicalServices && s.canonicalServices.length > 0 && (
-                <div className="sub-services">
-                  {s.canonicalServices.slice(0, 4).map(cs => (
-                    <span key={cs} className="mini-chip">{cs}</span>
-                  ))}
-                </div>
+        {sorted.slice(0, 300).map(s => (
+          <div
+            key={s.id}
+            className={'sub-card' + (s.id === selectedId ? ' selected' : '')}
+            onClick={() => setSelectedId(s.id)}
+          >
+            <div className="sub-name-row">
+              <div className="sub-name">{s.companyName}</div>
+              {s._dist != null && s._dist !== Infinity && (
+                <span className="sub-dist">{s._dist.toFixed(0)} mi</span>
               )}
             </div>
-          )
-        })}
+            <div className="sub-meta">
+              <StatusPill status={s.status} />
+              {s.city && <span className="sub-city">{s.city}, {s.state}</span>}
+            </div>
+            {s.canonicalServices && s.canonicalServices.length > 0 && (
+              <div className="sub-services">
+                {s.canonicalServices.slice(0, 4).map(cs => (
+                  <span key={cs} className="mini-chip">{cs}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
         {sorted.length > 300 && (
           <div style={{ padding: '12px 20px', fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
             Showing first 300 · refine filters to see more

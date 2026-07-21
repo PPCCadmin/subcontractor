@@ -32,7 +32,6 @@ export default function App() {
   const [filters, setFilters] = useState({
     search: '', jobQuery: '',
     services: new Set(), statuses: new Set(),
-    topRatedOnly: false
   })
 
   useEffect(() => {
@@ -66,7 +65,6 @@ export default function App() {
         for (const need of svc) if (!scs.has(need)) return false
       }
       if (st.size > 0 && !st.has(s.status)) return false
-      if (filters.topRatedOnly && (s.rating || 0) < 5) return false
       if (from && s.lat != null && s.lng != null) {
         const d = turf.distance(from, turf.point([s.lng, s.lat]), { units: 'miles' })
         if (d > radius) return false
@@ -136,10 +134,6 @@ export default function App() {
                   <span className="legend-swatch" style={{ background: s.color }}></span>{s.label}
                 </div>
               ))}
-              <div className="legend-item">
-                <span className="legend-swatch legend-swatch-star" style={{ background: '#1a5c38' }}></span>
-                5-star
-              </div>
             </div>
             {selectedSub && (
               <SubDetail

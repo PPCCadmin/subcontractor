@@ -1,12 +1,10 @@
-// Bumped cache key to v3 so users pick up the new subcontractors.json
-// (contact #2, coiOnFile, Recommended/DNU statuses, padded zips)
-const LS_KEY = 'hpp-subs-v3';
+// Bumped cache key to v4 to force reload after status/rating changes
+const LS_KEY = 'hpp-subs-v4';
 const LS_KEY_RFQS = 'hpp-rfqs-v2';
 const LS_KEY_PROJECTS = 'hpp-projects-v2';
 const LS_KEY_PRICING = 'hpp-pricing-v2';
 
 function migrate(sub) {
-  // Build contacts[] from BOTH primary and secondary contact columns
   let contacts = sub.contacts;
   if (!contacts) {
     contacts = [];
@@ -32,15 +30,16 @@ function migrate(sub) {
     }
   }
 
+  let status = sub.status;
+  if (status === 'Do Not Use') status = 'DNU';
+  if (status === 'Unknown' || status === 'Competitor' || !status) status = 'New';
+
   return {
     ...sub,
-    // Legacy status -> canonical
-    status: sub.status === 'Do Not Use' ? 'DNU' : sub.status,
+    status,
     businessStructure: sub.businessStructure || null,
     contacts,
-    // Compliance flag added (spreadsheet column "COI on file")
     coiOnFile: sub.coiOnFile ?? false,
-    // Second contact fields (kept as top-level too so form editing round-trips cleanly)
     contactName2: sub.contactName2 ?? null,
     position2:    sub.position2    ?? null,
     cellPhone2:   sub.cellPhone2   ?? null,
@@ -58,9 +57,9 @@ export async function loadSubs() {
     try { return JSON.parse(cached).map(migrate); }
     catch (e) { console.warn(e); }
   }
-  // Wipe stale v1/v2 caches so the new JSON is authoritative
   localStorage.removeItem('hpp-subs-v1');
   localStorage.removeItem('hpp-subs-v2');
+  localStorage.removeItem('hpp-subs-v3');
 
   const res = await fetch('/subcontractors.json');
   const data = (await res.json()).map(migrate);
@@ -81,15 +80,11 @@ export const SERVICE_TAXONOMY = [
   'Sealcoat', 'Striping', 'Crack Fill', 'Patching', 'Testing'
 ];
 
-// Statuses now match the spreadsheet exactly.
-// Legacy statuses (Do Not Use, Unknown, Competitor) kept for backward compatibility.
 export const STATUSES = [
   { key: 'Vetted',      label: 'Vetted',      color: '#1a5c38' },
-  { key: 'Recommended', label: 'Recommended', color: '#0d9488' },
+  { key: 'Recommended', label: 'Recommended', color: '#ca8a04' },
   { key: 'New',         label: 'New',         color: '#2563eb' },
   { key: 'DNU',         label: 'DNU',         color: '#dc2626' },
-  { key: 'Unknown',     label: 'Unknown',     color: '#6b7280' },
-  { key: 'Competitor',  label: 'Competitor',  color: '#b45309' },
 ];
 export const BUSINESS_STRUCTURES = ['LLC','Corporation','S-Corp','Partnership','Sole Proprietor','Other'];
 export const CONTACT_ROLES = ['Owner','Estimator','Accounting','Field Operations','Project Manager','Sales','Other'];

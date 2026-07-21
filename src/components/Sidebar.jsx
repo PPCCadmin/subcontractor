@@ -4,7 +4,8 @@ import { SearchIcon, MapPinIcon, PlusIcon, UploadIcon } from './icons.jsx'
 import * as turf from '@turf/turf'
 
 function StatusPill({ status }) {
-  const cls = 'pill pill-' + status.replace(/\s+/g, '')
+  if (!status) return null
+  const cls = 'pill pill-' + String(status).replace(/\s+/g, '')
   return <span className={cls}>{status}</span>
 }
 

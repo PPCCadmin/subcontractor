@@ -23,7 +23,8 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
       turf.point([jobLocation.lng, jobLocation.lat]),
       turf.point([sub.lng, sub.lat]), { units: 'miles' })
   }
-  const statusKey = sub.status.replace(/\s+/g, '')
+  // Null-safe: some records may have no status
+  const statusKey = (sub.status || 'Unknown').replace(/\s+/g, '')
 
   return (
     <div className={'detail' + (isTop ? ' detail-top' : '')}>
@@ -37,7 +38,7 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
             {[sub.address, sub.city, sub.state, sub.zip].filter(Boolean).join(', ')}
           </div>
           <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className={'pill pill-' + statusKey}>{sub.status}</span>
+            <span className={'pill pill-' + statusKey}>{sub.status || 'Unknown'}</span>
             {distance != null && (
               <span className="pill pill-distance">{distance.toFixed(0)} mi from job</span>
             )}
@@ -90,7 +91,8 @@ function InfoTab({ sub, patch }) {
         <div className="field-row">
           <div className="field">
             <label>Status</label>
-            <select value={sub.status} onChange={e => patch({ status: e.target.value })}>
+            <select value={sub.status || ''} onChange={e => patch({ status: e.target.value })}>
+              <option value="">—</option>
               {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </div>
@@ -111,6 +113,62 @@ function InfoTab({ sub, patch }) {
                     onClick={() => patch({ rating: sub.rating === n ? null : n })}>&#9733;</span>
             ))}
             {sub.rating && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)' }}>{sub.rating}/5</span>}
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <h4>Primary Contact</h4>
+        <div className="field-row">
+          <div className="field">
+            <label>Contact Name</label>
+            <input value={sub.contactName || ''} onChange={e => patch({ contactName: e.target.value || null })} />
+          </div>
+          <div className="field">
+            <label>Position</label>
+            <input value={sub.position || ''} onChange={e => patch({ position: e.target.value || null })} />
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>Phone (Business)</label>
+            <input value={sub.phone || ''} onChange={e => patch({ phone: e.target.value || null })} />
+          </div>
+          <div className="field">
+            <label>Cell</label>
+            <input value={sub.cellPhone || ''} onChange={e => patch({ cellPhone: e.target.value || null })} />
+          </div>
+        </div>
+        <div className="field">
+          <label>Email</label>
+          <input type="email" value={sub.email || ''} onChange={e => patch({ email: e.target.value || null })} />
+        </div>
+        <div className="field">
+          <label>Website</label>
+          <input value={sub.website || ''} onChange={e => patch({ website: e.target.value || null })} />
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <h4>Secondary Contact</h4>
+        <div className="field-row">
+          <div className="field">
+            <label>Contact Name #2</label>
+            <input value={sub.contactName2 || ''} onChange={e => patch({ contactName2: e.target.value || null })} />
+          </div>
+          <div className="field">
+            <label>Position #2</label>
+            <input value={sub.position2 || ''} onChange={e => patch({ position2: e.target.value || null })} />
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>Cell #2</label>
+            <input value={sub.cellPhone2 || ''} onChange={e => patch({ cellPhone2: e.target.value || null })} />
+          </div>
+          <div className="field">
+            <label>Email #2</label>
+            <input type="email" value={sub.email2 || ''} onChange={e => patch({ email2: e.target.value || null })} />
           </div>
         </div>
       </div>
@@ -161,11 +219,19 @@ function InfoTab({ sub, patch }) {
 
       <div className="detail-section">
         <h4>Compliance</h4>
-        <div className="field">
-          <label>W-9 on File</label>
-          <select value={sub.w9OnFile ? 'yes' : 'no'} onChange={e => patch({ w9OnFile: e.target.value === 'yes' })}>
-            <option value="no">No</option><option value="yes">Yes</option>
-          </select>
+        <div className="field-row">
+          <div className="field">
+            <label>W-9 on File</label>
+            <select value={sub.w9OnFile ? 'yes' : 'no'} onChange={e => patch({ w9OnFile: e.target.value === 'yes' })}>
+              <option value="no">No</option><option value="yes">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>COI on File</label>
+            <select value={sub.coiOnFile ? 'yes' : 'no'} onChange={e => patch({ coiOnFile: e.target.value === 'yes' })}>
+              <option value="no">No</option><option value="yes">Yes</option>
+            </select>
+          </div>
         </div>
         <div className="field-row">
           <div className="field">

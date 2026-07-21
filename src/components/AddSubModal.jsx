@@ -14,32 +14,31 @@ const EMPTY = {
   email: '',
   contactName: '',
   position: '',
+  // Secondary contact (matches spreadsheet columns 13-16)
+  contactName2: '',
+  position2: '',
+  cellPhone2: '',
+  email2: '',
   website: '',
   servicesRaw: '',
   notes: '',
   status: 'New',
+  w9OnFile: false,
+  coiOnFile: false,
   rating: null
 }
 
-export default function AddSubModal({
-  existingSubs,
-  onClose,
-  onCreate
-}) {
+export default function AddSubModal({ existingSubs, onClose, onCreate }) {
   const [f, setF] = useState(EMPTY)
   const [dupeWarn, setDupeWarn] = useState(null)
   const [hoveredRating, setHoveredRating] = useState(null)
 
   const set = (key, value) => {
-    setF(previous => ({
-      ...previous,
-      [key]: value
-    }))
+    setF(previous => ({ ...previous, [key]: value }))
   }
 
   const check = () => {
     if (!f.companyName.trim()) return
-
     const duplicate = findDuplicate(existingSubs, f)
     setDupeWarn(duplicate)
   }
@@ -49,14 +48,11 @@ export default function AddSubModal({
       alert('Company name is required.')
       return
     }
-
     const duplicate = findDuplicate(existingSubs, f)
-
     if (duplicate && !force) {
       setDupeWarn(duplicate)
       return
     }
-
     onCreate(buildSub(f))
     onClose()
   }
@@ -65,21 +61,10 @@ export default function AddSubModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal"
-        onClick={event => event.stopPropagation()}
-      >
+      <div className="modal" onClick={event => event.stopPropagation()}>
         <div className="modal-header">
-          <div className="modal-title">
-            Add Subcontractor
-          </div>
-
-          <button
-            type="button"
-            className="close-btn"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <div className="modal-title">Add Subcontractor</div>
+          <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
             <CloseIcon />
           </button>
         </div>
@@ -87,12 +72,9 @@ export default function AddSubModal({
         <div className="modal-body">
           <div className="field">
             <label>Company Name *</label>
-
             <input
               value={f.companyName}
-              onChange={event =>
-                set('companyName', event.target.value)
-              }
+              onChange={event => set('companyName', event.target.value)}
               onBlur={check}
               autoFocus
             />
@@ -102,7 +84,6 @@ export default function AddSubModal({
             <div className="dupe-warning">
               <strong>Possible duplicate:</strong>{' '}
               {dupeWarn.companyName}
-
               {(dupeWarn.city || dupeWarn.state) && (
                 <>
                   {' '}
@@ -110,14 +91,7 @@ export default function AddSubModal({
                   {dupeWarn.state || 'Unknown state'})
                 </>
               )}
-
-              <div
-                style={{
-                  marginTop: 8,
-                  display: 'flex',
-                  gap: 8
-                }}
-              >
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                 <button
                   type="button"
                   className="btn secondary"
@@ -131,185 +105,205 @@ export default function AddSubModal({
 
           <div className="field">
             <label>Address</label>
-
             <input
               value={f.address}
-              onChange={event =>
-                set('address', event.target.value)
-              }
+              onChange={event => set('address', event.target.value)}
             />
           </div>
 
           <div className="field-row">
             <div className="field">
               <label>City</label>
-
               <input
                 value={f.city}
-                onChange={event =>
-                  set('city', event.target.value)
-                }
+                onChange={event => set('city', event.target.value)}
                 onBlur={check}
               />
             </div>
-
             <div className="field">
               <label>State</label>
-
               <input
                 value={f.state}
                 onChange={event =>
-                  set(
-                    'state',
-                    event.target.value
-                      .toUpperCase()
-                      .slice(0, 2)
-                  )
+                  set('state', event.target.value.toUpperCase().slice(0, 2))
                 }
                 onBlur={check}
                 maxLength={2}
                 placeholder="WI"
               />
             </div>
-
             <div className="field">
               <label>Zip</label>
-
               <input
                 value={f.zip}
-                onChange={event =>
-                  set('zip', event.target.value)
-                }
-              />
-            </div>
-          </div>
-
-          <div className="field-row">
-            <div className="field">
-              <label>Phone</label>
-
-              <input
-                value={f.phone}
-                onChange={event =>
-                  set('phone', event.target.value)
-                }
-                onBlur={check}
-              />
-            </div>
-
-            <div className="field">
-              <label>Cell</label>
-
-              <input
-                value={f.cellPhone}
-                onChange={event =>
-                  set('cellPhone', event.target.value)
-                }
-              />
-            </div>
-          </div>
-
-          <div className="field-row">
-            <div className="field">
-              <label>Contact Name</label>
-
-              <input
-                value={f.contactName}
-                onChange={event =>
-                  set('contactName', event.target.value)
-                }
-              />
-            </div>
-
-            <div className="field">
-              <label>Position</label>
-
-              <input
-                value={f.position}
-                onChange={event =>
-                  set('position', event.target.value)
-                }
+                onChange={event => set('zip', event.target.value)}
               />
             </div>
           </div>
 
           <div className="field">
-            <label>Email</label>
-
+            <label>Business Phone</label>
             <input
-              type="email"
-              value={f.email}
-              onChange={event =>
-                set('email', event.target.value)
-              }
+              value={f.phone}
+              onChange={event => set('phone', event.target.value)}
+              onBlur={check}
             />
           </div>
 
           <div className="field">
             <label>Website</label>
-
             <input
               value={f.website}
-              onChange={event =>
-                set('website', event.target.value)
-              }
+              onChange={event => set('website', event.target.value)}
             />
           </div>
 
+          {/* ---------- PRIMARY CONTACT ---------- */}
+          <h4 style={{ margin: '16px 0 6px', fontSize: 13, color: 'var(--muted)', letterSpacing: 0.5 }}>
+            PRIMARY CONTACT
+          </h4>
+
+          <div className="field-row">
+            <div className="field">
+              <label>Contact Name #1</label>
+              <input
+                value={f.contactName}
+                onChange={event => set('contactName', event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Position #1</label>
+              <input
+                value={f.position}
+                onChange={event => set('position', event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div className="field">
+              <label>Cell #1</label>
+              <input
+                value={f.cellPhone}
+                onChange={event => set('cellPhone', event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Email #1</label>
+              <input
+                type="email"
+                value={f.email}
+                onChange={event => set('email', event.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* ---------- SECONDARY CONTACT ---------- */}
+          <h4 style={{ margin: '16px 0 6px', fontSize: 13, color: 'var(--muted)', letterSpacing: 0.5 }}>
+            SECONDARY CONTACT
+          </h4>
+
+          <div className="field-row">
+            <div className="field">
+              <label>Contact Name #2</label>
+              <input
+                value={f.contactName2}
+                onChange={event => set('contactName2', event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Position #2</label>
+              <input
+                value={f.position2}
+                onChange={event => set('position2', event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div className="field">
+              <label>Cell #2</label>
+              <input
+                value={f.cellPhone2}
+                onChange={event => set('cellPhone2', event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Email #2</label>
+              <input
+                type="email"
+                value={f.email2}
+                onChange={event => set('email2', event.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* ---------- SERVICES / STATUS ---------- */}
           <div className="field">
             <label>Services (comma-separated)</label>
-
             <input
               value={f.servicesRaw}
-              onChange={event =>
-                set('servicesRaw', event.target.value)
-              }
+              onChange={event => set('servicesRaw', event.target.value)}
               placeholder="Asphalt, Sealcoat, Striping"
             />
           </div>
 
           <div className="field">
             <label>Status</label>
-
             <select
               value={f.status}
-              onChange={event =>
-                set('status', event.target.value)
-              }
+              onChange={event => set('status', event.target.value)}
             >
               {STATUSES.map(status => (
-                <option
-                  key={status.key}
-                  value={status.key}
-                >
+                <option key={status.key} value={status.key}>
                   {status.label}
                 </option>
               ))}
             </select>
           </div>
 
+          {/* ---------- COMPLIANCE ---------- */}
+          <h4 style={{ margin: '16px 0 6px', fontSize: 13, color: 'var(--muted)', letterSpacing: 0.5 }}>
+            COMPLIANCE
+          </h4>
+
+          <div className="field-row">
+            <div className="field">
+              <label>W-9 on File</label>
+              <select
+                value={f.w9OnFile ? 'yes' : 'no'}
+                onChange={event => set('w9OnFile', event.target.value === 'yes')}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>COI on File</label>
+              <select
+                value={f.coiOnFile ? 'yes' : 'no'}
+                onChange={event => set('coiOnFile', event.target.value === 'yes')}
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+          </div>
+
+          {/* ---------- RATING ---------- */}
           <div className="field">
             <label>
               Rating{' '}
-              {f.rating
-                ? `(${f.rating} out of 5)`
-                : '(Not rated)'}
+              {f.rating ? `(${f.rating} out of 5)` : '(Not rated)'}
             </label>
-
             <div
               role="radiogroup"
               aria-label="Subcontractor rating"
               onMouseLeave={() => setHoveredRating(null)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                minHeight: 42
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, minHeight: 42 }}
             >
               {[1, 2, 3, 4, 5].map(star => {
                 const selected = star <= displayedRating
-
                 return (
                   <button
                     key={star}
@@ -318,15 +312,9 @@ export default function AddSubModal({
                     aria-checked={f.rating === star}
                     aria-label={`${star} out of 5 stars`}
                     title={`${star} out of 5 stars`}
-                    onMouseEnter={() =>
-                      setHoveredRating(star)
-                    }
-                    onFocus={() =>
-                      setHoveredRating(star)
-                    }
-                    onBlur={() =>
-                      setHoveredRating(null)
-                    }
+                    onMouseEnter={() => setHoveredRating(star)}
+                    onFocus={() => setHoveredRating(star)}
+                    onBlur={() => setHoveredRating(null)}
                     onClick={() => set('rating', star)}
                     style={{
                       appearance: 'none',
@@ -334,9 +322,7 @@ export default function AddSubModal({
                       border: 0,
                       padding: 2,
                       margin: 0,
-                      color: selected
-                        ? '#f5b301'
-                        : '#c7c7c7',
+                      color: selected ? '#f5b301' : '#c7c7c7',
                       fontSize: 30,
                       lineHeight: 1,
                       cursor: 'pointer'
@@ -346,16 +332,12 @@ export default function AddSubModal({
                   </button>
                 )
               })}
-
               {f.rating !== null && (
                 <button
                   type="button"
                   className="btn secondary"
                   onClick={() => set('rating', null)}
-                  style={{
-                    marginLeft: 8,
-                    padding: '6px 10px'
-                  }}
+                  style={{ marginLeft: 8, padding: '6px 10px' }}
                 >
                   Clear
                 </button>
@@ -365,33 +347,23 @@ export default function AddSubModal({
 
           <div className="field">
             <label>Notes</label>
-
             <textarea
               value={f.notes}
-              onChange={event =>
-                set('notes', event.target.value)
-              }
+              onChange={event => set('notes', event.target.value)}
             />
           </div>
         </div>
 
         <div className="modal-footer">
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={onClose}
-          >
+          <button type="button" className="btn secondary" onClick={onClose}>
             Cancel
           </button>
-
           <button
             type="button"
             className="btn"
             onClick={() => submit(Boolean(dupeWarn))}
           >
-            {dupeWarn
-              ? 'Add Anyway'
-              : 'Add Subcontractor'}
+            {dupeWarn ? 'Add Anyway' : 'Add Subcontractor'}
           </button>
         </div>
       </div>

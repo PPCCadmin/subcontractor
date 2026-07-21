@@ -4,13 +4,16 @@ import * as turf from '@turf/turf'
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
+// Status -> pin color. Must include every key in data.js STATUSES.
 const STATUS_COLOR_EXPR = [
   'match', ['get', 'status'],
-  'Vetted',     '#1a5c38',
-  'New',        '#2563eb',
-  'Do Not Use', '#dc2626',
-  'Competitor', '#b45309',
-  /* default (Unknown) */ '#8e8e93'
+  'Vetted',      '#1a5c38',
+  'Recommended', '#0d9488',
+  'New',         '#2563eb',
+  'DNU',         '#dc2626',
+  'Do Not Use',  '#dc2626',   // legacy alias
+  'Competitor',  '#b45309',
+  /* default (Unknown / null) */ '#8e8e93'
 ]
 
 export default function MapView({ subs, filteredIds, jobLocation, radius, selectedId, onSelect }) {
@@ -32,7 +35,6 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
 
     map.on('load', () => {
-      // Radius overlay
       map.addSource('radius', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({
         id: 'radius-fill', type: 'fill', source: 'radius',
@@ -43,51 +45,37 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
         paint: { 'line-color': '#1a5c38', 'line-width': 2, 'line-opacity': 0.55 }
       })
 
-      // Sub pins source
       map.addSource('subs', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
       })
 
-      // Gold glow under 5-star pins
       map.addLayer({
         id: 'subs-glow',
         type: 'circle',
         source: 'subs',
         filter: ['==', ['get', 'topRated'], true],
         paint: {
-          'circle-radius': [
-            'interpolate', ['linear'], ['zoom'],
-            3, 12,
-            8, 22,
-            14, 32
-          ],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 12, 8, 22, 14, 32],
           'circle-color': '#ffb800',
           'circle-opacity': 0.35,
           'circle-blur': 0.6
         }
       })
 
-      // BRIGHT blue halo ring under selected pin (highly visible)
       map.addLayer({
         id: 'subs-selected-halo',
         type: 'circle',
         source: 'subs',
-        filter: ['==', ['id'], -1],   // updated dynamically below
+        filter: ['==', ['id'], -1],
         paint: {
-          'circle-radius': [
-            'interpolate', ['linear'], ['zoom'],
-            3, 18,
-            8, 26,
-            14, 36
-          ],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 18, 8, 26, 14, 36],
           'circle-color': '#1a5c38',
           'circle-opacity': 0.35,
           'circle-blur': 0.4
         }
       })
 
-      // Main pin layer
       map.addLayer({
         id: 'subs-pin',
         type: 'circle',
@@ -95,20 +83,17 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
         paint: {
           'circle-radius': [
             'interpolate', ['linear'], ['zoom'],
-            3, [
-              'case',
+            3, ['case',
               ['boolean', ['feature-state', 'selected'], false], 10,
               ['get', 'topRated'], 8,
               5
             ],
-            8, [
-              'case',
+            8, ['case',
               ['boolean', ['feature-state', 'selected'], false], 14,
               ['get', 'topRated'], 12,
               8
             ],
-            14, [
-              'case',
+            14, ['case',
               ['boolean', ['feature-state', 'selected'], false], 20,
               ['get', 'topRated'], 18,
               12
@@ -149,7 +134,6 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
     }
   }, [])
 
-  // Push filtered pin data
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapLoaded) return
@@ -167,7 +151,7 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
         geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
         properties: {
           id: s.id,
-          status: s.status,
+          status: s.status || 'Unknown',
           topRated: (s.rating || 0) >= 5,
           rating: s.rating || 0,
           name: s.companyName
@@ -177,7 +161,6 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
     src.setData({ type: 'FeatureCollection', features })
   }, [subs, filteredIds, mapLoaded])
 
-  // Selection: fly to it + show halo + set feature-state
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapLoaded) return
@@ -186,24 +169,14 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
     if (prev != null) {
       try { map.setFeatureState({ source: 'subs', id: prev }, { selected: false }) } catch (e) {}
     }
-
     if (selectedId) {
       const sub = subs.find(s => s.id === selectedId)
       if (sub && sub._numericId != null) {
         try { map.setFeatureState({ source: 'subs', id: sub._numericId }, { selected: true }) } catch (e) {}
         prevSelectedRef.current = sub._numericId
-
-        // Update the halo filter to only show around the selected pin
         try { map.setFilter('subs-selected-halo', ['==', ['id'], sub._numericId]) } catch (e) {}
-
         if (sub.lat != null && sub.lng != null) {
-          map.flyTo({
-            center: [sub.lng, sub.lat],
-            zoom: 9,
-            speed: 1.4,
-            curve: 1.6,
-            essential: true
-          })
+          map.flyTo({ center: [sub.lng, sub.lat], zoom: 9, speed: 1.4, curve: 1.6, essential: true })
         }
       }
     } else {
@@ -212,7 +185,6 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
     }
   }, [selectedId, subs, mapLoaded])
 
-  // Job pin + radius circle
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapLoaded) return
@@ -236,11 +208,7 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
     const src = map.getSource('radius')
     if (src) {
       if (jobLocation) {
-        const circle = turf.circle(
-          [jobLocation.lng, jobLocation.lat],
-          radius,
-          { steps: 96, units: 'miles' }
-        )
+        const circle = turf.circle([jobLocation.lng, jobLocation.lat], radius, { steps: 96, units: 'miles' })
         src.setData({ type: 'FeatureCollection', features: [circle] })
       } else {
         src.setData({ type: 'FeatureCollection', features: [] })

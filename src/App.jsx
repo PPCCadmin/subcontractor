@@ -17,6 +17,15 @@ import {
 import { daysUntil } from './lib/metrics.js'
 import * as turf from '@turf/turf'
 
+// True if the sub has any COI (GL/Auto/WC) that is already expired
+// or will expire within `warnDays` (default 30).
+function hasCoiExpiringSoon(sub, warnDays = 30) {
+  return [sub.coiGL, sub.coiAuto, sub.coiWC].some(d => {
+    const days = daysUntil(d)
+    return days !== null && days <= warnDays
+  })
+}
+
 export default function App() {
   const [subs, setSubs] = useState([])
   const [rfqs, setRfqs] = useState([])
@@ -32,6 +41,7 @@ export default function App() {
   const [filters, setFilters] = useState({
     search: '', jobQuery: '',
     services: new Set(), statuses: new Set(),
+    coiExpiringOnly: false,
   })
 
   useEffect(() => {
@@ -65,6 +75,7 @@ export default function App() {
         for (const need of svc) if (!scs.has(need)) return false
       }
       if (st.size > 0 && !st.has(s.status)) return false
+      if (filters.coiExpiringOnly && !hasCoiExpiringSoon(s, 30)) return false
       if (from && s.lat != null && s.lng != null) {
         const d = turf.distance(from, turf.point([s.lng, s.lat]), { units: 'miles' })
         if (d > radius) return false
@@ -92,10 +103,7 @@ export default function App() {
   }
 
   const alertCount = useMemo(() =>
-    subs.filter(s => [s.coiGL, s.coiAuto, s.coiWC].some(d => {
-      const days = daysUntil(d)
-      return days !== null && days >= 0 && days <= 30
-    })).length
+    subs.filter(s => hasCoiExpiringSoon(s, 30)).length
   , [subs])
 
   if (loading) return <div style={{ padding: 40, fontFamily: 'system-ui' }}>Loading...</div>

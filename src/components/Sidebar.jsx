@@ -1,12 +1,58 @@
 import React from 'react'
 import { SERVICE_TAXONOMY, STATUSES } from '../data.js'
 import { SearchIcon, MapPinIcon, PlusIcon, UploadIcon } from './icons.jsx'
+import { expiryStatus, daysUntil } from '../lib/metrics.js'
 import * as turf from '@turf/turf'
 
 function StatusPill({ status }) {
   if (!status) return null
   const cls = 'pill pill-' + String(status).replace(/\s+/g, '')
   return <span className={cls}>{status}</span>
+}
+
+// Worst-case COI status across GL / Auto / WC for a single sub.
+// Returns { level, days, label } or null when there are no COI dates.
+function subCoiSummary(sub) {
+  const rows = [
+    { key: 'GL',   value: sub.coiGL },
+    { key: 'Auto', value: sub.coiAuto },
+    { key: 'WC',   value: sub.coiWC },
+  ].filter(r => r.value)
+
+  if (!rows.length) return null
+
+  let worst = null // 'expired' > 'expiring' > 'ok'
+  let soonest = { days: Infinity, key: null }
+
+  for (const r of rows) {
+    const status = expiryStatus(r.value)
+    const d = daysUntil(r.value)
+    if (d !== null && d < soonest.days) soonest = { days: d, key: r.key }
+    if (status === 'expired') worst = 'expired'
+    else if (status === 'expiring' && worst !== 'expired') worst = 'expiring'
+    else if (!worst) worst = 'ok'
+  }
+
+  if (worst === 'expired')  return { level: 'expired',  days: soonest.days, label: `${soonest.key} expired` }
+  if (worst === 'expiring') return { level: 'expiring', days: soonest.days, label: `${soonest.key} in ${soonest.days}d` }
+  return null // don't clutter cards when everything is fine
+}
+
+function CoiChip({ sub }) {
+  const s = subCoiSummary(sub)
+  if (!s) return null
+  const style = s.level === 'expired'
+    ? { background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca' }
+    : { background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }
+  return (
+    <span
+      className="mini-chip"
+      title={`Certificate of Insurance – ${s.label}`}
+      style={{ ...style, fontWeight: 600 }}
+    >
+      ⚠ COI {s.level === 'expired' ? 'Expired' : s.label}
+    </span>
+  )
 }
 
 export default function Sidebar({
@@ -22,6 +68,9 @@ export default function Sidebar({
     const next = new Set(filters.statuses)
     next.has(s) ? next.delete(s) : next.add(s)
     setFilters({ ...filters, statuses: next })
+  }
+  const toggleCoiExpiring = () => {
+    setFilters({ ...filters, coiExpiringOnly: !filters.coiExpiringOnly })
   }
 
   const geocode = async () => {
@@ -147,6 +196,20 @@ export default function Sidebar({
             </div>
           ))}
         </div>
+
+        <div className="filter-label" style={{ marginTop: 12 }}>Compliance</div>
+        <div className="chips">
+          <div
+            className={'chip' + (filters.coiExpiringOnly ? ' active' : '')}
+            onClick={toggleCoiExpiring}
+            title="Show only subs with a COI expired or expiring within 30 days"
+            style={filters.coiExpiringOnly
+              ? { background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }
+              : {}}
+          >
+            ⚠ COI Expiring ≤30d
+          </div>
+        </div>
       </div>
 
       <div className="list-count">
@@ -170,9 +233,10 @@ export default function Sidebar({
               <StatusPill status={s.status} />
               {s.city && <span className="sub-city">{s.city}, {s.state}</span>}
             </div>
-            {s.canonicalServices && s.canonicalServices.length > 0 && (
+            {(s.canonicalServices?.length > 0 || subCoiSummary(s)) && (
               <div className="sub-services">
-                {s.canonicalServices.slice(0, 4).map(cs => (
+                <CoiChip sub={s} />
+                {s.canonicalServices && s.canonicalServices.slice(0, 4).map(cs => (
                   <span key={cs} className="mini-chip">{cs}</span>
                 ))}
               </div>

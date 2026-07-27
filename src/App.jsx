@@ -8,12 +8,11 @@ import TopNav from './components/TopNav.jsx'
 import ExpirationBanner from './components/ExpirationBanner.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import RfqView from './components/RfqView.jsx'
-import ProjectsView from './components/ProjectsView.jsx'
-import PricingView from './components/PricingView.jsx'
 import {
   loadSubs, saveSubs, loadRfqs, saveRfqs,
-  loadProjects, saveProjects, loadPricing, savePricing, STATUSES
+  loadProjects, saveProjects, STATUSES, visibleSubsForRole
 } from './data.js'
+import { fetchUser, isAdmin, LOGIN_URL } from './lib/auth.js'
 import { daysUntil } from './lib/metrics.js'
 import * as turf from '@turf/turf'
 
@@ -26,11 +25,33 @@ function hasCoiExpiringSoon(sub, warnDays = 30) {
   })
 }
 
+function LoginScreen() {
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-brand">
+          <div className="login-brand-mark">HPP</div>
+          <div>
+            <div className="login-brand-name">SubFinder</div>
+            <div className="login-brand-sub">Heartland Paving Partners</div>
+          </div>
+        </div>
+        <div className="login-title">Sign in required</div>
+        <p className="login-text">
+          This tool contains proprietary HPS subcontractor data. Sign in with your
+          Heartland Paving Partners account to continue.
+        </p>
+        <a className="btn login-btn" href={LOGIN_URL}>Sign in with Microsoft</a>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  const [user, setUser] = useState(null) // null = auth loading
   const [subs, setSubs] = useState([])
   const [rfqs, setRfqs] = useState([])
   const [projects, setProjects] = useState([])
-  const [pricing, setPricing] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('map')
   const [jobLocation, setJobLocation] = useState(null)
@@ -44,28 +65,47 @@ export default function App() {
     coiExpiringOnly: false,
   })
 
+  // Resolve the signed-in user (SSO). In local dev there is no /.auth endpoint,
+  // so fall back to an admin identity so you can still work locally.
   useEffect(() => {
+    if (import.meta?.env?.DEV) {
+      setUser({ authenticated: true, name: 'Local Dev', email: 'dev@local', role: 'admin', bu: null })
+      return
+    }
+    fetchUser().then(setUser)
+  }, [])
+
+  useEffect(() => {
+    if (!user?.authenticated) return
     loadSubs().then(d => {
       const withNum = d.map((s, i) => ({ ...s, _numericId: i + 1 }))
       setSubs(withNum)
       setRfqs(loadRfqs())
       setProjects(loadProjects())
-      setPricing(loadPricing())
       setLoading(false)
     })
-  }, [])
+  }, [user])
 
   useEffect(() => { if (subs.length) saveSubs(subs) }, [subs])
   useEffect(() => { saveRfqs(rfqs) }, [rfqs])
   useEffect(() => { saveProjects(projects) }, [projects])
-  useEffect(() => { savePricing(pricing) }, [pricing])
+
+  const role = user?.role || 'hps'
+  const admin = isAdmin(user)
+
+  // Everything downstream works off the role-scoped set so BU users can never
+  // see (on the map, in the list, in the dashboard) vendors they aren't allowed to.
+  const visibleSubs = useMemo(
+    () => visibleSubsForRole(subs, role),
+    [subs, role]
+  )
 
   const filtered = useMemo(() => {
     const q = filters.search.trim().toLowerCase()
     const svc = filters.services
     const st = filters.statuses
     const from = jobLocation ? turf.point([jobLocation.lng, jobLocation.lat]) : null
-    return subs.filter(s => {
+    return visibleSubs.filter(s => {
       if (q) {
         const hay = `${s.companyName} ${s.city || ''} ${s.state || ''} ${s.contactName || ''} ${s.notes || ''}`.toLowerCase()
         if (!hay.includes(q)) return false
@@ -82,10 +122,10 @@ export default function App() {
       } else if (from) { return false }
       return true
     })
-  }, [subs, filters, jobLocation, radius])
+  }, [visibleSubs, filters, jobLocation, radius])
 
   const filteredIds = useMemo(() => filtered.map(s => s.id), [filtered])
-  const selectedSub = subs.find(s => s.id === selectedId) || null
+  const selectedSub = visibleSubs.find(s => s.id === selectedId) || null
 
   const updateSub = (updated) => {
     setSubs(prev => prev.map(s => s.id === updated.id ? updated : s))
@@ -103,32 +143,34 @@ export default function App() {
   }
 
   const alertCount = useMemo(() =>
-    subs.filter(s => hasCoiExpiringSoon(s, 30)).length
-  , [subs])
+    visibleSubs.filter(s => hasCoiExpiringSoon(s, 30)).length
+  , [visibleSubs])
 
-  if (loading) return <div style={{ padding: 40, fontFamily: 'system-ui' }}>Loading...</div>
+  // ---- Auth gates ----------------------------------------------------------
+  if (user === null) return <div style={{ padding: 40, fontFamily: 'system-ui' }}>Signing in…</div>
+  if (!user.authenticated) return <LoginScreen />
+  if (loading) return <div style={{ padding: 40, fontFamily: 'system-ui' }}>Loading…</div>
 
   const openSubFromDashboard = (id) => { setSelectedId(id); setTab('map') }
 
   return (
     <div className="app-root">
-      <TopNav active={tab} onChange={setTab} alertCount={alertCount} />
-      {tab !== 'dashboard' && <ExpirationBanner subs={subs} onView={() => setTab('dashboard')} />}
-
+      <TopNav active={tab} onChange={setTab} alertCount={alertCount} user={user} />
+      {tab !== 'dashboard' && <ExpirationBanner subs={visibleSubs} onView={() => setTab('dashboard')} />}
       {tab === 'map' && (
         <div className="app">
           <Sidebar
-            subs={subs} filteredSubs={filtered}
+            subs={visibleSubs} filteredSubs={filtered}
             filters={filters} setFilters={setFilters}
             jobLocation={jobLocation} setJobLocation={setJobLocation}
             radius={radius} setRadius={setRadius}
             selectedId={selectedId} setSelectedId={setSelectedId}
-            onAdd={() => setShowAdd(true)}
-            onImport={() => setShowImport(true)}
+            onAdd={admin ? () => setShowAdd(true) : null}
+            onImport={admin ? () => setShowImport(true) : null}
           />
           <div className="map-wrap">
             <MapView
-              subs={subs} filteredIds={filteredIds}
+              subs={visibleSubs} filteredIds={filteredIds}
               jobLocation={jobLocation} radius={radius}
               selectedId={selectedId} onSelect={setSelectedId}
             />
@@ -149,6 +191,7 @@ export default function App() {
                 jobLocation={jobLocation}
                 rfqs={rfqs}
                 projects={projects}
+                canEdit={admin}
                 onClose={() => setSelectedId(null)}
                 onChange={updateSub}
               />
@@ -156,16 +199,12 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {tab === 'dashboard' && <Dashboard subs={subs} projects={projects} onOpenSub={openSubFromDashboard} />}
-      {tab === 'rfqs'      && <RfqView rfqs={rfqs} setRfqs={setRfqs} subs={subs} />}
-      {tab === 'projects'  && <ProjectsView projects={projects} setProjects={setProjects} subs={subs} />}
-      {tab === 'pricing'   && <PricingView pricing={pricing} setPricing={setPricing} subs={subs} projects={projects} />}
-
-      {showAdd && (
+      {tab === 'dashboard' && <Dashboard subs={visibleSubs} projects={projects} onOpenSub={openSubFromDashboard} />}
+      {tab === 'rfqs' && (admin || role === 'hps') && <RfqView rfqs={rfqs} setRfqs={setRfqs} subs={visibleSubs} />}
+      {showAdd && admin && (
         <AddSubModal existingSubs={subs} onClose={() => setShowAdd(false)} onCreate={createSub} />
       )}
-      {showImport && (
+      {showImport && admin && (
         <CsvImportModal existingSubs={subs} onClose={() => setShowImport(false)} onImport={createManySubs} />
       )}
     </div>

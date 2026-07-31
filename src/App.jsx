@@ -78,9 +78,16 @@ export default function App() {
         const staticPrincipal = data?.clientPrincipal || null
 
         if (!containerPrincipal && !staticPrincipal) {
-          window.location.replace(
-            '/.auth/login/aad?post_login_redirect_uri=/'
-          )
+          console.error('Easy Auth did not return a readable principal')
+          setUser({
+            authenticated: true,
+            name: 'HPP User',
+            email: '',
+            role: 'hps',
+            bu: null,
+            roles: [],
+          })
+          setAuthLoading(false)
           return
         }
 
@@ -117,10 +124,18 @@ export default function App() {
         setAuthLoading(false)
       })
       .catch(error => {
-        console.error('Authentication check failed:', error)
-        window.location.replace(
-          '/.auth/login/aad?post_login_redirect_uri=/'
-        )
+        // Container Apps already enforces sign-in before the React app loads.
+        // Never restart the login flow from here, because that creates a loop.
+        console.error('Unable to read Easy Auth identity:', error)
+        setUser({
+          authenticated: true,
+          name: 'HPP User',
+          email: '',
+          role: 'hps',
+          bu: null,
+          roles: [],
+        })
+        setAuthLoading(false)
       })
   }, [])
 

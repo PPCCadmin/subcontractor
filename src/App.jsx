@@ -72,15 +72,25 @@ export default function App() {
         return response.json()
       })
       .then(data => {
-        const principal = data?.clientPrincipal
-        if (!principal) {
-          window.location.replace('/.auth/login/aad')
+        // Azure Container Apps Easy Auth returns an array from /.auth/me.
+        // Static Web Apps returns { clientPrincipal }, so support both formats.
+        const containerPrincipal = Array.isArray(data) ? data[0] : null
+        const staticPrincipal = data?.clientPrincipal || null
+
+        if (!containerPrincipal && !staticPrincipal) {
+          window.location.replace(
+            '/.auth/login/aad?post_login_redirect_uri=/'
+          )
           return
         }
 
-        const claims = principal.claims || []
+        const containerClaims = containerPrincipal?.user_claims || []
+        const staticClaims = staticPrincipal?.claims || []
+        const claims = containerClaims.length ? containerClaims : staticClaims
+
         const email = String(
-          principal.userDetails ||
+          containerPrincipal?.user_name ||
+          staticPrincipal?.userDetails ||
           claimValue(claims, 'preferred_username') ||
           claimValue(claims, 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress') ||
           claimValue(claims, 'emails') ||
@@ -99,13 +109,18 @@ export default function App() {
           email,
           role: ADMIN_EMAILS.has(email) ? 'admin' : 'hps',
           bu: null,
-          roles: principal.userRoles || [],
+          roles:
+            staticPrincipal?.userRoles ||
+            containerPrincipal?.user_roles ||
+            [],
         })
         setAuthLoading(false)
       })
       .catch(error => {
         console.error('Authentication check failed:', error)
-        window.location.replace('/.auth/login/aad')
+        window.location.replace(
+          '/.auth/login/aad?post_login_redirect_uri=/'
+        )
       })
   }, [])
 

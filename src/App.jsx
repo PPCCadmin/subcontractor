@@ -28,16 +28,19 @@ function hasCoiExpiringSoon(sub, warnDays = 30) {
   })
 }
 
+const ADMIN_EMAILS = new Set([
+  'luke.norvid@heartlandpavingpartners.com',
+  'todd.koehler@heartlandpavingpartners.com',
+  'lisa.callahan@heartlandpavingsolutions.com',
+])
+
+function claimValue(claims, type) {
+  return claims?.find(claim => claim.typ === type)?.val || ''
+}
+
 export default function App() {
-  // Azure Container Apps Easy Auth already protects the site and handles sign-in.
-  // Do not add a second client-side /.auth/me login gate here.
-  const user = {
-    authenticated: true,
-    name: 'HPP User',
-    email: '',
-    role: 'admin',
-    bu: null,
-  }
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   const [subs, setSubs] = useState([])
   const [rfqs, setRfqs] = useState([])
@@ -56,6 +59,55 @@ export default function App() {
     statuses: new Set(),
     coiExpiringOnly: false,
   })
+
+  useEffect(() => {
+    fetch('/.auth/me', {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Authentication check failed: ${response.status}`)
+        }
+        return response.json()
+      })
+      .then(data => {
+        const principal = data?.clientPrincipal
+        if (!principal) {
+          window.location.replace('/.auth/login/aad')
+          return
+        }
+
+        const claims = principal.claims || []
+        const email = String(
+          principal.userDetails ||
+          claimValue(claims, 'preferred_username') ||
+          claimValue(claims, 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress') ||
+          claimValue(claims, 'emails') ||
+          ''
+        ).trim().toLowerCase()
+
+        const name =
+          claimValue(claims, 'name') ||
+          claimValue(claims, 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name') ||
+          email ||
+          'HPP User'
+
+        setUser({
+          authenticated: true,
+          name,
+          email,
+          role: ADMIN_EMAILS.has(email) ? 'admin' : 'hps',
+          bu: null,
+          roles: principal.userRoles || [],
+        })
+        setAuthLoading(false)
+      })
+      .catch(error => {
+        console.error('Authentication check failed:', error)
+        window.location.replace('/.auth/login/aad')
+      })
+  }, [])
 
   useEffect(() => {
     loadSubs()
@@ -88,8 +140,8 @@ export default function App() {
     saveProjects(projects)
   }, [projects])
 
-  const role = user.role
-  const admin = true
+  const role = user?.role || 'hps'
+  const admin = role === 'admin'
 
   const visibleSubs = useMemo(
     () => visibleSubsForRole(subs, role),
@@ -191,6 +243,14 @@ export default function App() {
   const openSubFromDashboard = id => {
     setSelectedId(id)
     setTab('map')
+  }
+
+  if (authLoading || !user) {
+    return (
+      <div style={{ padding: 40, fontFamily: 'system-ui' }}>
+        Signing in...
+      </div>
+    )
   }
 
   if (loading) {

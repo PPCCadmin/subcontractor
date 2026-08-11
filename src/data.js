@@ -1,7 +1,19 @@
 // Bumped cache key to v6 to force every browser to load the expanded dataset.
-const LS_KEY = 'hpp-subs-v9';
+const LS_KEY = 'hpp-subs-v10';
 const LS_KEY_RFQS = 'hpp-rfqs-v2';
 const LS_KEY_PROJECTS = 'hpp-projects-v2';
+
+function normalizedServices(sub) {
+  const services = [...new Set((sub.canonicalServices || []).filter(Boolean))];
+  const raw = String(sub.servicesRaw || '');
+  const name = String(sub.companyName || '');
+  const combined = `${raw} ${name}`;
+  const sealcoatVariant = /\b(seal\s*coat(?:ing)?|sealcaot(?:ing)?|selacoat(?:ing)?|sealcaoting)\b/i;
+  if (sealcoatVariant.test(combined) && !services.includes('Sealcoat Suppliers') && !services.includes('Sealcoat')) services.push('Sealcoat');
+  const testingProvider = /\b(test(?:ing)?|laborator(?:y|ies)|test labs?)\b/i.test(name) || /\bTesting\b/i.test(raw) || /^(QAI|SME|Terracon)\b/i.test(name) || /^(CTL Thompson|EGS Testing)\b/i.test(name);
+  if (testingProvider && !services.includes('Testing')) services.push('Testing');
+  return services;
+}
 
 function migrate(sub) {
   let contacts = sub.contacts;
@@ -36,6 +48,7 @@ function migrate(sub) {
   return {
     ...sub,
     status,
+    canonicalServices: normalizedServices(sub),
     businessStructure: sub.businessStructure || null,
     contacts,
     coiOnFile: sub.coiOnFile ?? false,
@@ -70,8 +83,9 @@ export async function loadSubs() {
   localStorage.removeItem('hpp-subs-v6');
   localStorage.removeItem('hpp-subs-v7');
   localStorage.removeItem('hpp-subs-v8');
+  localStorage.removeItem('hpp-subs-v9');
 
-  const res = await fetch('/subcontractors.json?v=9', { cache: 'no-store' });
+  const res = await fetch('/subcontractors.json?v=10', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Unable to load subcontractors.json (${res.status})`);
   }
@@ -113,9 +127,13 @@ export const SERVICE_TAXONOMY = [
   'Trucking',
   'Dumping',
   'Sealcoat',
+  'Sealcoat Suppliers',
   'Striping',
   'Crack Fill',
   'Patching',
+  'Micro Paving',
+  'Soil Stabilization',
+  'Equipment Rental',
   'Testing',
 ];
 

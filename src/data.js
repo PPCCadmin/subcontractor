@@ -1,5 +1,5 @@
-// Bumped cache key to v6 to force every browser to load the expanded dataset.
-const LS_KEY = 'hpp-subs-v10';
+// Bumped cache key so every browser reloads the corrected service classifications.
+const LS_KEY = 'hpp-subs-v11';
 const LS_KEY_RFQS = 'hpp-rfqs-v2';
 const LS_KEY_PROJECTS = 'hpp-projects-v2';
 
@@ -8,11 +8,24 @@ function normalizedServices(sub) {
   const raw = String(sub.servicesRaw || '');
   const name = String(sub.companyName || '');
   const combined = `${raw} ${name}`;
+
   const sealcoatVariant = /\b(seal\s*coat(?:ing)?|sealcaot(?:ing)?|selacoat(?:ing)?|sealcaoting)\b/i;
-  if (sealcoatVariant.test(combined) && !services.includes('Sealcoat Suppliers') && !services.includes('Sealcoat')) services.push('Sealcoat');
-  const testingProvider = /\b(test(?:ing)?|laborator(?:y|ies)|test labs?)\b/i.test(name) || /\bTesting\b/i.test(raw) || /^(QAI|SME|Terracon)\b/i.test(name) || /^(CTL Thompson|EGS Testing)\b/i.test(name);
-  if (testingProvider && !services.includes('Testing')) services.push('Testing');
-  return services;
+  if (
+    sealcoatVariant.test(combined) &&
+    !services.includes('Sealcoat Suppliers') &&
+    !services.includes('Sealcoat')
+  ) {
+    services.push('Sealcoat');
+  }
+
+  // Testing should only be assigned when the company name contains the full word "testing".
+  const testingProvider = /\btesting\b/i.test(name);
+
+  // Remove any previously auto-assigned Testing value that does not meet the corrected rule.
+  const withoutTesting = services.filter(service => service !== 'Testing');
+  if (testingProvider) withoutTesting.push('Testing');
+
+  return withoutTesting;
 }
 
 function migrate(sub) {
@@ -84,8 +97,9 @@ export async function loadSubs() {
   localStorage.removeItem('hpp-subs-v7');
   localStorage.removeItem('hpp-subs-v8');
   localStorage.removeItem('hpp-subs-v9');
+  localStorage.removeItem('hpp-subs-v10');
 
-  const res = await fetch('/subcontractors.json?v=10', { cache: 'no-store' });
+  const res = await fetch('/subcontractors.json?v=11', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Unable to load subcontractors.json (${res.status})`);
   }
@@ -100,8 +114,11 @@ export function saveSubs(subs) {
 }
 
 export function loadRfqs() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY_RFQS) || '[]'); }
-  catch { return []; }
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY_RFQS) || '[]');
+  } catch {
+    return [];
+  }
 }
 
 export function saveRfqs(value) {
@@ -109,8 +126,11 @@ export function saveRfqs(value) {
 }
 
 export function loadProjects() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY_PROJECTS) || '[]'); }
-  catch { return []; }
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY_PROJECTS) || '[]');
+  } catch {
+    return [];
+  }
 }
 
 export function saveProjects(value) {
@@ -158,23 +178,64 @@ export function visibleSubsForRole(subs, role) {
 }
 
 export const BUSINESS_STRUCTURES = [
-  'LLC', 'Corporation', 'S-Corp', 'Partnership', 'Sole Proprietor', 'Other',
+  'LLC',
+  'Corporation',
+  'S-Corp',
+  'Partnership',
+  'Sole Proprietor',
+  'Other',
 ];
+
 export const CONTACT_ROLES = [
-  'Owner', 'Estimator', 'Accounting', 'Field Operations', 'Project Manager', 'Sales', 'Other',
+  'Owner',
+  'Estimator',
+  'Accounting',
+  'Field Operations',
+  'Project Manager',
+  'Sales',
+  'Other',
 ];
+
 export const PROJECT_SCALES = [
-  '< $20k', '$20k–$100k', '$100k–$300k', 'Capital (> $300k)',
+  '< $20k',
+  '$20k–$100k',
+  '$100k–$300k',
+  'Capital (> $300k)',
 ];
+
 export const EQUIPMENT_TYPES = [
-  'Paver', 'Mill', 'Roller', 'Distributor', 'Sweeper', 'Sealcoat Rig', 'Striper',
-  'Concrete Plant', 'Asphalt Plant', 'Truck', 'Other',
+  'Paver',
+  'Mill',
+  'Roller',
+  'Distributor',
+  'Sweeper',
+  'Sealcoat Rig',
+  'Striper',
+  'Concrete Plant',
+  'Asphalt Plant',
+  'Truck',
+  'Other',
 ];
+
 export const LICENSE_TYPES = [
-  'General Contractor', 'Paving', 'Concrete', 'DOT', 'State-Specific', 'Other',
+  'General Contractor',
+  'Paving',
+  'Concrete',
+  'DOT',
+  'State-Specific',
+  'Other',
 ];
+
 export const ATTACHMENT_TYPES = [
-  'COI', 'W-9', 'MSA', 'Contract', 'License', 'Quote', 'Repair Map', 'Mix Design', 'Other',
+  'COI',
+  'W-9',
+  'MSA',
+  'Contract',
+  'License',
+  'Quote',
+  'Repair Map',
+  'Mix Design',
+  'Other',
 ];
 
 export const STATUSES = [

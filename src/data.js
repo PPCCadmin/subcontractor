@@ -1,5 +1,5 @@
 // Bumped cache key to v6 to force every browser to load the expanded dataset.
-const LS_KEY = 'hpp-subs-v12';
+const LS_KEY = 'hpp-subs-v14';
 const LS_KEY_RFQS = 'hpp-rfqs-v2';
 const LS_KEY_PROJECTS = 'hpp-projects-v2';
 
@@ -8,10 +8,15 @@ function normalizedServices(sub) {
   const raw = String(sub.servicesRaw || '');
   const name = String(sub.companyName || '');
   const combined = `${raw} ${name}`;
+
   const sealcoatVariant = /\b(seal\s*coat(?:ing)?|sealcaot(?:ing)?|selacoat(?:ing)?|sealcaoting)\b/i;
-  if (sealcoatVariant.test(combined) && !services.includes('Sealcoat Suppliers') && !services.includes('Sealcoat')) services.push('Sealcoat');
-  const testingProvider = /\b(test(?:ing)?|laborator(?:y|ies)|test labs?)\b/i.test(name) || /\bTesting\b/i.test(raw) || /^(QAI|SME|Terracon)\b/i.test(name) || /^(CTL Thompson|EGS Testing)\b/i.test(name);
+  if (sealcoatVariant.test(combined) && !services.includes('Sealcoat Suppliers') && !services.includes('Sealcoat')) {
+    services.push('Sealcoat');
+  }
+
+  const testingProvider = /\btesting\b/i.test(name) || /^\s*testing\s*$/i.test(raw);
   if (testingProvider && !services.includes('Testing')) services.push('Testing');
+
   return services;
 }
 
@@ -45,10 +50,13 @@ function migrate(sub) {
   if (status === 'Do Not Use') status = 'DNU';
   if (status === 'Unknown' || status === 'Competitor' || !status) status = 'New';
 
+  const normalized = normalizedServices(sub);
+  if (normalized.includes('Testing')) status = 'Vetted';
+
   return {
     ...sub,
     status,
-    canonicalServices: normalizedServices(sub),
+    canonicalServices: normalized,
     businessStructure: sub.businessStructure || null,
     contacts,
     coiOnFile: sub.coiOnFile ?? false,
@@ -87,7 +95,9 @@ export async function loadSubs() {
 
   localStorage.removeItem('hpp-subs-v10');
   localStorage.removeItem('hpp-subs-v11');
-  const res = await fetch('/subcontractors.json?v=12', { cache: 'no-store' });
+  localStorage.removeItem('hpp-subs-v12');
+  localStorage.removeItem('hpp-subs-v13');
+  const res = await fetch('/subcontractors.json?v=14', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Unable to load subcontractors.json (${res.status})`);
   }

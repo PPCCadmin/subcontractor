@@ -11,7 +11,7 @@ function StatCard({ label, value, color, sub }) {
   )
 }
 
-export default function Dashboard({ subs, projects, onOpenSub }) {
+export default function Dashboard({ subs, totalRecords = subs.length, projects, onOpenSub }) {
   const stats = useMemo(() => {
     const total = subs.length
     const byStatus = {}
@@ -48,7 +48,7 @@ export default function Dashboard({ subs, projects, onOpenSub }) {
       <div className="dashboard-section">
         <h3>Overview</h3>
         <div className="stat-grid">
-          <StatCard label="Total Subcontractors" value={stats.total} />
+          <StatCard label="Total Records" value={totalRecords.toLocaleString()} sub={totalRecords === stats.total ? 'All loaded records' : `${stats.total.toLocaleString()} visible to your role`} />
           <StatCard label="Vetted"       value={stats.byStatus['Vetted']      || 0} color="#1a5c38" />
           <StatCard label="Recommended"  value={stats.byStatus['Recommended'] || 0} color="#ca8a04" />
           <StatCard label="New"          value={stats.byStatus['New']         || 0} color="#2563eb" />

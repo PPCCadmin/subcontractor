@@ -231,6 +231,11 @@ export default function App() {
     [filtered]
   )
 
+  const mappedCount = useMemo(
+    () => filtered.filter(sub => sub.lat != null && sub.lng != null).length,
+    [filtered]
+  )
+
   const selectedSub =
     visibleSubs.find(sub => sub.id === selectedId) || null
 
@@ -335,13 +340,13 @@ export default function App() {
             />
 
             <div className="map-overlay">
-              <strong>{filtered.length.toLocaleString()}</strong>
-              &nbsp;subs shown
-              {jobLocation && (
-                <span style={{ color: 'var(--muted)' }}>
-                  &nbsp;within {radius} mi
-                </span>
-              )}
+              <strong>{subs.length.toLocaleString()}</strong>
+              &nbsp;total records
+              <span style={{ color: 'var(--muted)' }}>
+                · {filtered.length.toLocaleString()} matching
+                · {mappedCount.toLocaleString()} mapped
+                {jobLocation ? ` within ${radius} mi` : ''}
+              </span>
             </div>
 
             <div className="legend">
@@ -374,6 +379,7 @@ export default function App() {
       {tab === 'dashboard' && (
         <Dashboard
           subs={visibleSubs}
+          totalRecords={subs.length}
           projects={projects}
           onOpenSub={openSubFromDashboard}
         />

@@ -1,8 +1,13 @@
-import React, { useState, useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import {
-  BUSINESS_STRUCTURES, CONTACT_ROLES, PROJECT_SCALES,
-  EQUIPMENT_TYPES, LICENSE_TYPES, ATTACHMENT_TYPES,
-  SERVICE_TAXONOMY, STATUSES
+  BUSINESS_STRUCTURES,
+  CONTACT_ROLES,
+  PROJECT_SCALES,
+  EQUIPMENT_TYPES,
+  LICENSE_TYPES,
+  ATTACHMENT_TYPES,
+  SERVICE_TAXONOMY,
+  STATUSES,
 } from '../data.js'
 import { CloseIcon, TrashIcon, UploadIcon, DownloadIcon, PhoneIcon, PlusIcon, WarningIcon } from './icons.jsx'
 import { subHitRate, daysUntil } from '../lib/metrics.js'
@@ -14,235 +19,135 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
   const [tab, setTab] = useState('Info')
   if (!sub) return null
 
-  const patch = (p) => onChange({ ...sub, ...p })
-
-  let distance = null
-  if (jobLocation && sub.lat != null && sub.lng != null) {
-    distance = turf.distance(
-      turf.point([jobLocation.lng, jobLocation.lat]),
-      turf.point([sub.lng, sub.lat]), { units: 'miles' })
-  }
+  const patch = changes => onChange({ ...sub, ...changes })
+  const distance = jobLocation && sub.lat != null && sub.lng != null
+    ? turf.distance(turf.point([jobLocation.lng, jobLocation.lat]), turf.point([sub.lng, sub.lat]), { units: 'miles' })
+    : null
   const statusKey = (sub.status || 'New').replace(/\s+/g, '')
 
   return (
     <div className="detail">
       <div className="detail-header">
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="detail-heading-copy">
           <div className="detail-title">{sub.companyName}</div>
-          <div className="detail-address">
-            {[sub.address, sub.city, sub.state, sub.zip].filter(Boolean).join(', ')}
-          </div>
-          <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className={'pill pill-' + statusKey}>{sub.status || 'New'}</span>
-            {sub.locationAccuracy === 'approximate' && (
-              <span className="pill pill-approx" title="This point is an approximate city-level location">Approximate location</span>
-            )}
-            {distance != null && (
-              <span className="pill pill-distance">{distance.toFixed(0)} mi from job</span>
-            )}
+          <div className="detail-address">{[sub.address, sub.city, sub.state, sub.zip].filter(Boolean).join(', ')}</div>
+          <div className="detail-pills">
+            <span className={`pill pill-${statusKey}`}>{sub.status || 'New'}</span>
+            {sub.locationAccuracy === 'approximate' && <span className="pill pill-approx">Approximate location</span>}
+            {distance != null && <span className="pill pill-distance">{distance.toFixed(0)} mi from job</span>}
           </div>
         </div>
         <button className="close-btn" onClick={onClose}><CloseIcon /></button>
       </div>
 
       <div className="detail-tabs">
-        {TABS.map(t => (
-          <button key={t}
-                  className={'detail-tab' + (tab === t ? ' active' : '')}
-                  onClick={() => setTab(t)}>{t}</button>
+        {TABS.map(name => (
+          <button key={name} className={`detail-tab${tab === name ? ' active' : ''}`} onClick={() => setTab(name)}>{name}</button>
         ))}
       </div>
 
       <div className="detail-body">
-        {tab === 'Info'      && <InfoTab sub={sub} patch={patch} />}
-        {tab === 'Contacts'  && <ContactsTab sub={sub} patch={patch} />}
+        {tab === 'Info' && <InfoTab sub={sub} patch={patch} />}
+        {tab === 'Contacts' && <ContactsTab sub={sub} patch={patch} />}
         {tab === 'Equipment' && <EquipmentTab sub={sub} patch={patch} />}
-        {tab === 'Licenses'  && <LicensesTab sub={sub} patch={patch} />}
-        {tab === 'Files'     && <FilesTab sub={sub} patch={patch} />}
-        {tab === 'Metrics'   && <MetricsTab sub={sub} rfqs={rfqs} projects={projects} />}
+        {tab === 'Licenses' && <LicensesTab sub={sub} patch={patch} />}
+        {tab === 'Files' && <FilesTab sub={sub} patch={patch} />}
+        {tab === 'Metrics' && <MetricsTab sub={sub} rfqs={rfqs} projects={projects} />}
       </div>
     </div>
   )
 }
 
 function InfoTab({ sub, patch }) {
-  const toggleService = (svc) => {
-    const has = sub.canonicalServices?.includes(svc)
-    patch({
-      canonicalServices: has
-        ? sub.canonicalServices.filter(s => s !== svc)
-        : [...(sub.canonicalServices || []), svc]
-    })
+  const toggleService = service => {
+    const current = sub.canonicalServices || []
+    patch({ canonicalServices: current.includes(service) ? current.filter(item => item !== service) : [...current, service] })
   }
-  const toggleScale = (scale) => {
-    const has = sub.projectScales?.includes(scale)
-    patch({
-      projectScales: has
-        ? sub.projectScales.filter(s => s !== scale)
-        : [...(sub.projectScales || []), scale]
-    })
+
+  const toggleScale = scale => {
+    const current = sub.projectScales || []
+    patch({ projectScales: current.includes(scale) ? current.filter(item => item !== scale) : [...current, scale] })
   }
+
   return (
     <>
-      <div className="detail-section">
-        <h4>Overview</h4>
+      <Section title="Overview">
         <div className="field-row">
-          <div className="field">
-            <label>Status</label>
-            <select value={sub.status || ''} onChange={e => patch({ status: e.target.value })}>
-              <option value="">—</option>
-              {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+          <Field label="Status">
+            <select value={sub.status || ''} onChange={event => patch({ status: event.target.value })}>
+              <option value="">Select</option>
+              {STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
             </select>
-          </div>
-          <div className="field">
-            <label>Business Structure</label>
-            <select value={sub.businessStructure || ''} onChange={e => patch({ businessStructure: e.target.value || null })}>
-              <option value="">—</option>
-              {BUSINESS_STRUCTURES.map(b => <option key={b} value={b}>{b}</option>)}
+          </Field>
+          <Field label="Business Structure">
+            <select value={sub.businessStructure || ''} onChange={event => patch({ businessStructure: event.target.value || null })}>
+              <option value="">Select</option>
+              {BUSINESS_STRUCTURES.map(value => <option key={value} value={value}>{value}</option>)}
             </select>
-          </div>
+          </Field>
         </div>
-      </div>
+      </Section>
 
-      <div className="detail-section">
-        <h4>Primary Contact</h4>
+      <Section title="Primary Contact">
         <div className="field-row">
-          <div className="field">
-            <label>Contact Name</label>
-            <input value={sub.contactName || ''} onChange={e => patch({ contactName: e.target.value || null })} />
-          </div>
-          <div className="field">
-            <label>Position</label>
-            <input value={sub.position || ''} onChange={e => patch({ position: e.target.value || null })} />
-          </div>
+          <Field label="Contact Name"><input value={sub.contactName || ''} onChange={event => patch({ contactName: event.target.value || null })} /></Field>
+          <Field label="Position"><input value={sub.position || ''} onChange={event => patch({ position: event.target.value || null })} /></Field>
         </div>
         <div className="field-row">
-          <div className="field">
-            <label>Phone (Business)</label>
-            <input value={sub.phone || ''} onChange={e => patch({ phone: e.target.value || null })} />
-          </div>
-          <div className="field">
-            <label>Cell</label>
-            <input value={sub.cellPhone || ''} onChange={e => patch({ cellPhone: e.target.value || null })} />
-          </div>
+          <Field label="Business Phone"><input value={sub.phone || ''} onChange={event => patch({ phone: event.target.value || null })} /></Field>
+          <Field label="Cell"><input value={sub.cellPhone || ''} onChange={event => patch({ cellPhone: event.target.value || null })} /></Field>
         </div>
-        <div className="field">
-          <label>Email</label>
-          <input type="email" value={sub.email || ''} onChange={e => patch({ email: e.target.value || null })} />
-        </div>
-        <div className="field">
-          <label>Website</label>
-          <input value={sub.website || ''} onChange={e => patch({ website: e.target.value || null })} />
-        </div>
-      </div>
+        <Field label="Email"><input type="email" value={sub.email || ''} onChange={event => patch({ email: event.target.value || null })} /></Field>
+        <Field label="Website"><input value={sub.website || ''} onChange={event => patch({ website: event.target.value || null })} /></Field>
+      </Section>
 
-      <div className="detail-section">
-        <h4>Secondary Contact</h4>
+      <Section title="Secondary Contact">
         <div className="field-row">
-          <div className="field">
-            <label>Contact Name #2</label>
-            <input value={sub.contactName2 || ''} onChange={e => patch({ contactName2: e.target.value || null })} />
-          </div>
-          <div className="field">
-            <label>Position #2</label>
-            <input value={sub.position2 || ''} onChange={e => patch({ position2: e.target.value || null })} />
-          </div>
+          <Field label="Contact Name"><input value={sub.contactName2 || ''} onChange={event => patch({ contactName2: event.target.value || null })} /></Field>
+          <Field label="Position"><input value={sub.position2 || ''} onChange={event => patch({ position2: event.target.value || null })} /></Field>
         </div>
         <div className="field-row">
-          <div className="field">
-            <label>Cell #2</label>
-            <input value={sub.cellPhone2 || ''} onChange={e => patch({ cellPhone2: e.target.value || null })} />
-          </div>
-          <div className="field">
-            <label>Email #2</label>
-            <input type="email" value={sub.email2 || ''} onChange={e => patch({ email2: e.target.value || null })} />
-          </div>
+          <Field label="Cell"><input value={sub.cellPhone2 || ''} onChange={event => patch({ cellPhone2: event.target.value || null })} /></Field>
+          <Field label="Email"><input type="email" value={sub.email2 || ''} onChange={event => patch({ email2: event.target.value || null })} /></Field>
         </div>
-      </div>
+      </Section>
 
-      <div className="detail-section">
-        <h4>Services</h4>
+      <Section title="Services">
         <div className="chips">
-          {SERVICE_TAXONOMY.map(s => (
-            <div key={s}
-                 className={'chip' + ((sub.canonicalServices || []).includes(s) ? ' active' : '')}
-                 onClick={() => toggleService(s)}>{s}</div>
+          {SERVICE_TAXONOMY.map(service => (
+            <button type="button" key={service} className={`chip${(sub.canonicalServices || []).includes(service) ? ' active' : ''}`} onClick={() => toggleService(service)}>{service}</button>
           ))}
         </div>
-        {sub.servicesRaw && (
-          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
-            Original: {sub.servicesRaw}
-          </div>
-        )}
-      </div>
+        {sub.servicesRaw && <div className="original-services">Original: {sub.servicesRaw}</div>}
+      </Section>
 
-      <div className="detail-section">
-        <h4>Project Scales</h4>
+      <Section title="Project Scales">
         <div className="chips">
-          {PROJECT_SCALES.map(p => (
-            <div key={p}
-                 className={'chip' + ((sub.projectScales || []).includes(p) ? ' active' : '')}
-                 onClick={() => toggleScale(p)}>{p}</div>
+          {PROJECT_SCALES.map(scale => (
+            <button type="button" key={scale} className={`chip${(sub.projectScales || []).includes(scale) ? ' active' : ''}`} onClick={() => toggleScale(scale)}>{scale}</button>
           ))}
         </div>
-      </div>
+      </Section>
 
-      <div className="detail-section">
-        <h4>Vetting</h4>
+      <Section title="Vetting and Documentation">
         <div className="field-row">
-          <div className="field">
-            <label>MSA on File</label>
-            <select value={sub.msaStatus ? 'yes' : 'no'} onChange={e => patch({ msaStatus: e.target.value === 'yes' })}>
+          <Field label="MSA on File">
+            <select value={sub.msaStatus ? 'yes' : 'no'} onChange={event => patch({ msaStatus: event.target.value === 'yes' })}>
               <option value="no">No</option><option value="yes">Yes</option>
             </select>
-          </div>
-          <div className="field">
-            <label>MSA Effective Date</label>
-            <input type="date" value={sub.msaEffectiveDate || ''}
-                   onChange={e => patch({ msaEffectiveDate: e.target.value || null })} />
-          </div>
+          </Field>
+          <Field label="MSA Effective Date"><input type="date" value={sub.msaEffectiveDate || ''} onChange={event => patch({ msaEffectiveDate: event.target.value || null })} /></Field>
         </div>
-      </div>
+        <Field label="W-9 on File">
+          <select value={sub.w9OnFile ? 'yes' : 'no'} onChange={event => patch({ w9OnFile: event.target.value === 'yes' })}>
+            <option value="no">No</option><option value="yes">Yes</option>
+          </select>
+        </Field>
+      </Section>
 
-      <div className="detail-section">
-        <h4>Compliance</h4>
-        <div className="field-row">
-          <div className="field">
-            <label>W-9 on File</label>
-            <select value={sub.w9OnFile ? 'yes' : 'no'} onChange={e => patch({ w9OnFile: e.target.value === 'yes' })}>
-              <option value="no">No</option><option value="yes">Yes</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>COI on File</label>
-            <select value={sub.coiOnFile ? 'yes' : 'no'} onChange={e => patch({ coiOnFile: e.target.value === 'yes' })}>
-              <option value="no">No</option><option value="yes">Yes</option>
-            </select>
-          </div>
-        </div>
-        <div className="field-row">
-          <div className="field">
-            <label>COI — GL Exp.</label>
-            <input type="date" value={sub.coiGL || ''} onChange={e => patch({ coiGL: e.target.value || null })} />
-          </div>
-          <div className="field">
-            <label>COI — Auto Exp.</label>
-            <input type="date" value={sub.coiAuto || ''} onChange={e => patch({ coiAuto: e.target.value || null })} />
-          </div>
-        </div>
-        <div className="field">
-          <label>COI — Work Comp Exp.</label>
-          <input type="date" value={sub.coiWC || ''} onChange={e => patch({ coiWC: e.target.value || null })} />
-        </div>
-      </div>
-
-      <div className="detail-section">
-        <h4>Notes</h4>
-        <div className="field">
-          <textarea value={sub.notes || ''} onChange={e => patch({ notes: e.target.value })}
-                    placeholder="Relationship context, travel exceptions, strengths/weaknesses, vetting insights..." />
-        </div>
-      </div>
+      <Section title="Notes">
+        <Field label=""><textarea value={sub.notes || ''} onChange={event => patch({ notes: event.target.value })} placeholder="Relationship context, travel exceptions, strengths, weaknesses, and vetting notes" /></Field>
+      </Section>
     </>
   )
 }
@@ -250,8 +155,8 @@ function InfoTab({ sub, patch }) {
 function ContactsTab({ sub, patch }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', role: 'Estimator', phone: '', cellPhone: '', email: '' })
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const contacts = sub.contacts || []
+  const set = (key, value) => setForm(previous => ({ ...previous, [key]: value }))
 
   const add = () => {
     if (!form.name.trim()) return alert('Name required')
@@ -259,58 +164,42 @@ function ContactsTab({ sub, patch }) {
     setForm({ name: '', role: 'Estimator', phone: '', cellPhone: '', email: '' })
     setAdding(false)
   }
-  const remove = (id) => patch({ contacts: contacts.filter(c => c.id !== id) })
 
   return (
-    <div className="detail-section">
-      <h4>Contacts ({contacts.length})</h4>
-      {contacts.map(c => (
-        <div key={c.id} className="list-item">
-          <div style={{ flex: 1 }}>
-            <div className="li-name"><strong>{c.name}</strong> <span className="mini-chip">{c.role}</span></div>
-            {c.phone && <div className="li-meta"><PhoneIcon /> {c.phone}</div>}
-            {c.cellPhone && <div className="li-meta"><PhoneIcon /> {c.cellPhone} (cell)</div>}
-            {c.email && <div className="li-meta">{c.email}</div>}
+    <Section title={`Contacts (${contacts.length})`}>
+      {contacts.map(contact => (
+        <div key={contact.id} className="list-item">
+          <div className="list-item-content">
+            <div className="li-name"><strong>{contact.name}</strong><span className="mini-chip">{contact.role}</span></div>
+            {contact.phone && <div className="li-meta"><PhoneIcon /> {contact.phone}</div>}
+            {contact.cellPhone && <div className="li-meta"><PhoneIcon /> {contact.cellPhone} (cell)</div>}
+            {contact.email && <div className="li-meta">{contact.email}</div>}
           </div>
-          <button className="icon-only-btn" onClick={() => remove(c.id)} title="Delete"><TrashIcon /></button>
+          <button className="icon-only-btn" onClick={() => patch({ contacts: contacts.filter(item => item.id !== contact.id) })}><TrashIcon /></button>
         </div>
       ))}
+
       {adding ? (
         <div className="inline-form">
           <div className="field-row">
-            <div className="field"><label>Name *</label>
-              <input value={form.name} onChange={e => set('name', e.target.value)} autoFocus /></div>
-            <div className="field"><label>Role</label>
-              <select value={form.role} onChange={e => set('role', e.target.value)}>
-                {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select></div>
+            <Field label="Name"><input value={form.name} onChange={event => set('name', event.target.value)} autoFocus /></Field>
+            <Field label="Role"><select value={form.role} onChange={event => set('role', event.target.value)}>{CONTACT_ROLES.map(role => <option key={role}>{role}</option>)}</select></Field>
           </div>
           <div className="field-row">
-            <div className="field"><label>Phone</label>
-              <input value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
-            <div className="field"><label>Cell</label>
-              <input value={form.cellPhone} onChange={e => set('cellPhone', e.target.value)} /></div>
+            <Field label="Phone"><input value={form.phone} onChange={event => set('phone', event.target.value)} /></Field>
+            <Field label="Cell"><input value={form.cellPhone} onChange={event => set('cellPhone', event.target.value)} /></Field>
           </div>
-          <div className="field"><label>Email</label>
-            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} /></div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn" onClick={add}>Save</button>
-            <button className="btn secondary" onClick={() => setAdding(false)}>Cancel</button>
-          </div>
+          <Field label="Email"><input type="email" value={form.email} onChange={event => set('email', event.target.value)} /></Field>
+          <FormButtons onSave={add} onCancel={() => setAdding(false)} />
         </div>
-      ) : (
-        <button className="btn secondary" onClick={() => setAdding(true)} style={{ marginTop: 8 }}>
-          <PlusIcon /> Add Contact
-        </button>
-      )}
-    </div>
+      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add Contact</button>}
+    </Section>
   )
 }
 
 function EquipmentTab({ sub, patch }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ type: 'Paver', count: 1, ownership: 'Owned' })
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const equipment = sub.equipment || []
 
   const add = () => {
@@ -318,55 +207,33 @@ function EquipmentTab({ sub, patch }) {
     setForm({ type: 'Paver', count: 1, ownership: 'Owned' })
     setAdding(false)
   }
-  const remove = (id) => patch({ equipment: equipment.filter(e => e.id !== id) })
 
   return (
-    <div className="detail-section">
-      <h4>Equipment ({equipment.length})</h4>
-      {equipment.map(e => (
-        <div key={e.id} className="list-item">
-          <div style={{ flex: 1 }}>
-            <div className="li-name">
-              <strong>{e.type}</strong>
-              <span className="mini-chip">×{e.count}</span>
-              <span className={'mini-chip ' + (e.ownership === 'Owned' ? 'chip-owned' : 'chip-rented')}>{e.ownership}</span>
-            </div>
-          </div>
-          <button className="icon-only-btn" onClick={() => remove(e.id)}><TrashIcon /></button>
+    <Section title={`Equipment (${equipment.length})`}>
+      {equipment.map(item => (
+        <div key={item.id} className="list-item">
+          <div className="list-item-content"><div className="li-name"><strong>{item.type}</strong><span className="mini-chip">×{item.count}</span><span className="mini-chip">{item.ownership}</span></div></div>
+          <button className="icon-only-btn" onClick={() => patch({ equipment: equipment.filter(value => value.id !== item.id) })}><TrashIcon /></button>
         </div>
       ))}
+
       {adding ? (
         <div className="inline-form">
-          <div className="field-row">
-            <div className="field"><label>Type</label>
-              <select value={form.type} onChange={e => set('type', e.target.value)}>
-                {EQUIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select></div>
-            <div className="field"><label>Count</label>
-              <input type="number" min="1" value={form.count} onChange={e => set('count', e.target.value)} /></div>
-            <div className="field"><label>Ownership</label>
-              <select value={form.ownership} onChange={e => set('ownership', e.target.value)}>
-                <option>Owned</option><option>Rented</option>
-              </select></div>
+          <div className="field-row field-row-three">
+            <Field label="Type"><select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}>{EQUIPMENT_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>
+            <Field label="Count"><input type="number" min="1" value={form.count} onChange={event => setForm({ ...form, count: event.target.value })} /></Field>
+            <Field label="Ownership"><select value={form.ownership} onChange={event => setForm({ ...form, ownership: event.target.value })}><option>Owned</option><option>Rented</option></select></Field>
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn" onClick={add}>Save</button>
-            <button className="btn secondary" onClick={() => setAdding(false)}>Cancel</button>
-          </div>
+          <FormButtons onSave={add} onCancel={() => setAdding(false)} />
         </div>
-      ) : (
-        <button className="btn secondary" onClick={() => setAdding(true)} style={{ marginTop: 8 }}>
-          <PlusIcon /> Add Equipment
-        </button>
-      )}
-    </div>
+      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add Equipment</button>}
+    </Section>
   )
 }
 
 function LicensesTab({ sub, patch }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ type: 'General Contractor', number: '', state: '', expiration: '' })
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const licenses = sub.licenses || []
 
   const add = () => {
@@ -375,56 +242,34 @@ function LicensesTab({ sub, patch }) {
     setForm({ type: 'General Contractor', number: '', state: '', expiration: '' })
     setAdding(false)
   }
-  const remove = (id) => patch({ licenses: licenses.filter(l => l.id !== id) })
 
   return (
-    <div className="detail-section">
-      <h4>Licenses ({licenses.length})</h4>
-      {licenses.map(l => {
-        const days = daysUntil(l.expiration)
-        const badge = days === null ? null
-          : days < 0    ? { cls: 'chip-expired', txt: `Expired ${Math.abs(days)}d ago` }
-          : days <= 30  ? { cls: 'chip-expiring', txt: `${days}d left` }
-          : { cls: '', txt: `${days}d left` }
+    <Section title={`Licenses (${licenses.length})`}>
+      {licenses.map(license => {
+        const days = daysUntil(license.expiration)
         return (
-          <div key={l.id} className="list-item">
-            <div style={{ flex: 1 }}>
-              <div className="li-name">
-                <strong>{l.type}</strong>
-                {l.state && <span className="mini-chip">{l.state}</span>}
-                {badge && <span className={'mini-chip ' + badge.cls}>{badge.txt}</span>}
-              </div>
-              <div className="li-meta">#{l.number}{l.expiration && ` · expires ${l.expiration}`}</div>
+          <div key={license.id} className="list-item">
+            <div className="list-item-content">
+              <div className="li-name"><strong>{license.type}</strong>{license.state && <span className="mini-chip">{license.state}</span>}{days != null && <span className={`mini-chip${days < 0 ? ' chip-expired' : days <= 30 ? ' chip-expiring' : ''}`}>{days < 0 ? `Expired ${Math.abs(days)}d ago` : `${days}d left`}</span>}</div>
+              <div className="li-meta">#{license.number}{license.expiration && ` · expires ${license.expiration}`}</div>
             </div>
-            <button className="icon-only-btn" onClick={() => remove(l.id)}><TrashIcon /></button>
+            <button className="icon-only-btn" onClick={() => patch({ licenses: licenses.filter(value => value.id !== license.id) })}><TrashIcon /></button>
           </div>
         )
       })}
+
       {adding ? (
         <div className="inline-form">
-          <div className="field"><label>Type</label>
-            <select value={form.type} onChange={e => set('type', e.target.value)}>
-              {LICENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select></div>
-          <div className="field-row">
-            <div className="field"><label>License #</label>
-              <input value={form.number} onChange={e => set('number', e.target.value)} /></div>
-            <div className="field"><label>State</label>
-              <input value={form.state} onChange={e => set('state', e.target.value.toUpperCase().slice(0,2))} maxLength="2" /></div>
-            <div className="field"><label>Expiration</label>
-              <input type="date" value={form.expiration} onChange={e => set('expiration', e.target.value)} /></div>
+          <Field label="Type"><select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}>{LICENSE_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>
+          <div className="field-row field-row-three">
+            <Field label="License Number"><input value={form.number} onChange={event => setForm({ ...form, number: event.target.value })} /></Field>
+            <Field label="State"><input value={form.state} maxLength="2" onChange={event => setForm({ ...form, state: event.target.value.toUpperCase() })} /></Field>
+            <Field label="Expiration"><input type="date" value={form.expiration} onChange={event => setForm({ ...form, expiration: event.target.value })} /></Field>
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn" onClick={add}>Save</button>
-            <button className="btn secondary" onClick={() => setAdding(false)}>Cancel</button>
-          </div>
+          <FormButtons onSave={add} onCancel={() => setAdding(false)} />
         </div>
-      ) : (
-        <button className="btn secondary" onClick={() => setAdding(true)} style={{ marginTop: 8 }}>
-          <PlusIcon /> Add License
-        </button>
-      )}
-    </div>
+      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add License</button>}
+    </Section>
   )
 }
 
@@ -432,139 +277,94 @@ function FilesTab({ sub, patch }) {
   const inputRef = useRef(null)
   const [pending, setPending] = useState(null)
   const attachments = sub.attachments || []
-  const totalKB = attachments.reduce((sum, a) => sum + (a.size || 0), 0) / 1024
-  const overLimit = totalKB > 5120
+  const totalKB = attachments.reduce((sum, file) => sum + (file.size || 0), 0) / 1024
 
-  const onFilePick = (e) => {
-    const file = e.target.files[0]
+  const chooseFile = event => {
+    const file = event.target.files[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      setPending({
-        id: crypto.randomUUID(),
-        type: 'COI',
-        filename: file.name,
-        mimeType: file.type,
-        size: file.size,
-        dataBase64: ev.target.result,
-        uploadedAt: new Date().toISOString()
-      })
-    }
+    reader.onload = result => setPending({
+      id: crypto.randomUUID(),
+      type: 'Other',
+      filename: file.name,
+      mimeType: file.type,
+      size: file.size,
+      dataBase64: result.target.result,
+      uploadedAt: new Date().toISOString(),
+    })
     reader.readAsDataURL(file)
-    e.target.value = ''
+    event.target.value = ''
   }
-  const savePending = () => {
-    patch({ attachments: [...attachments, pending] })
-    setPending(null)
-  }
-  const remove = (id) => {
-    if (confirm('Delete this file?')) patch({ attachments: attachments.filter(a => a.id !== id) })
-  }
-  const download = (a) => {
+
+  const download = file => {
     const link = document.createElement('a')
-    link.href = a.dataBase64
-    link.download = a.filename
+    link.href = file.dataBase64
+    link.download = file.filename
     link.click()
   }
 
   return (
-    <div className="detail-section">
-      <h4>Files ({attachments.length}) · {totalKB.toFixed(0)} KB</h4>
-      {overLimit && (
-        <div className="banner banner-warn" style={{ margin: '0 0 12px' }}>
-          <WarningIcon /> Attachments exceed 5MB — consider deleting old files to keep browser storage healthy.
-        </div>
-      )}
-      {attachments.map(a => (
-        <div key={a.id} className="list-item">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="li-name">
-              <span className={'mini-chip chip-file-' + a.type.replace(/[\s-]+/g,'')}>{a.type}</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.filename}</span>
-            </div>
-            <div className="li-meta">
-              {(a.size / 1024).toFixed(1)} KB · uploaded {a.uploadedAt.slice(0, 10)}
-            </div>
-          </div>
-          <button className="icon-only-btn" onClick={() => download(a)} title="Download"><DownloadIcon /></button>
-          <button className="icon-only-btn" onClick={() => remove(a.id)} title="Delete"><TrashIcon /></button>
+    <Section title={`Files (${attachments.length}) · ${totalKB.toFixed(0)} KB`}>
+      {totalKB > 5120 && <div className="banner banner-warn"><WarningIcon /> Attachments exceed 5 MB.</div>}
+      {attachments.map(file => (
+        <div key={file.id} className="list-item">
+          <div className="list-item-content"><div className="li-name"><span className="mini-chip">{file.type}</span><span>{file.filename}</span></div><div className="li-meta">{(file.size / 1024).toFixed(1)} KB · uploaded {file.uploadedAt?.slice(0, 10)}</div></div>
+          <button className="icon-only-btn" onClick={() => download(file)}><DownloadIcon /></button>
+          <button className="icon-only-btn" onClick={() => patch({ attachments: attachments.filter(value => value.id !== file.id) })}><TrashIcon /></button>
         </div>
       ))}
+
       {pending && (
         <div className="inline-form">
-          <div className="li-name" style={{ marginBottom: 8 }}>
-            <strong>{pending.filename}</strong>
-            <span className="mini-chip">{(pending.size / 1024).toFixed(1)} KB</span>
-          </div>
-          <div className="field">
-            <label>Document Type</label>
-            <select value={pending.type} onChange={e => setPending({ ...pending, type: e.target.value })}>
-              {ATTACHMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn" onClick={savePending}>Attach</button>
-            <button className="btn secondary" onClick={() => setPending(null)}>Cancel</button>
-          </div>
+          <div className="li-name"><strong>{pending.filename}</strong><span className="mini-chip">{(pending.size / 1024).toFixed(1)} KB</span></div>
+          <Field label="Document Type"><select value={pending.type} onChange={event => setPending({ ...pending, type: event.target.value })}>{ATTACHMENT_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>
+          <FormButtons onSave={() => { patch({ attachments: [...attachments, pending] }); setPending(null) }} onCancel={() => setPending(null)} />
         </div>
       )}
-      <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={onFilePick}
-             accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx" />
-      {!pending && (
-        <button className="btn secondary" onClick={() => inputRef.current?.click()} style={{ marginTop: 8 }}>
-          <UploadIcon /> Upload File
-        </button>
-      )}
-    </div>
+
+      <input ref={inputRef} type="file" hidden onChange={chooseFile} accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx" />
+      {!pending && <button className="btn secondary add-row-btn" onClick={() => inputRef.current?.click()}><UploadIcon /> Upload File</button>}
+    </Section>
   )
 }
 
 function MetricsTab({ sub, rfqs, projects }) {
-  const hr = subHitRate(sub.id, rfqs)
-  const subProjects = projects.filter(p => p.subId === sub.id)
-    .sort((a,b) => (b.completionDate || '').localeCompare(a.completionDate || ''))
+  const hitRate = subHitRate(sub.id, rfqs)
+  const subProjects = projects.filter(project => project.subId === sub.id).sort((a, b) => (b.completionDate || '').localeCompare(a.completionDate || ''))
 
   return (
     <>
-      <div className="detail-section">
-        <h4>Performance Metrics</h4>
+      <Section title="Performance Metrics">
         <div className="metric-grid">
-          <div className="metric-tile">
-            <div className="metric-num">{hr.invited}</div>
-            <div className="metric-lbl">RFQ Invites</div>
-          </div>
-          <div className="metric-tile">
-            <div className="metric-num">{hr.awarded}</div>
-            <div className="metric-lbl">Awards</div>
-          </div>
-          <div className="metric-tile">
-            <div className="metric-num">{hr.rate != null ? `${Math.round(hr.rate * 100)}%` : '—'}</div>
-            <div className="metric-lbl">Hit Rate</div>
-          </div>
-          <div className="metric-tile">
-            <div className="metric-num">{subProjects.length}</div>
-            <div className="metric-lbl">Projects</div>
-          </div>
+          <Metric value={hitRate.invited} label="RFQ Invites" />
+          <Metric value={hitRate.awarded} label="Awards" />
+          <Metric value={hitRate.rate != null ? `${Math.round(hitRate.rate * 100)}%` : '—'} label="Hit Rate" />
+          <Metric value={subProjects.length} label="Projects" />
         </div>
-      </div>
-
+      </Section>
       {subProjects.length > 0 && (
-        <div className="detail-section">
-          <h4>Recent Projects</h4>
-          {subProjects.slice(0, 5).map(p => (
-            <div key={p.id} className="list-item">
-              <div style={{ flex: 1 }}>
-                <div className="li-name"><strong>{p.name}</strong></div>
-                <div className="li-meta">
-                  {[p.city, p.state].filter(Boolean).join(', ')}
-                  {p.completionDate && ` · completed ${p.completionDate}`}
-                  {p.contractValue && ` · $${(+p.contractValue).toLocaleString()}`}
-                </div>
-              </div>
-            </div>
+        <Section title="Recent Projects">
+          {subProjects.slice(0, 5).map(project => (
+            <div key={project.id} className="list-item"><div className="list-item-content"><div className="li-name"><strong>{project.name}</strong></div><div className="li-meta">{[project.city, project.state].filter(Boolean).join(', ')}{project.completionDate && ` · completed ${project.completionDate}`}</div></div></div>
           ))}
-        </div>
+        </Section>
       )}
     </>
   )
+}
+
+function Section({ title, children }) {
+  return <div className="detail-section"><h4>{title}</h4>{children}</div>
+}
+
+function Field({ label, children }) {
+  return <div className="field">{label && <label>{label}</label>}{children}</div>
+}
+
+function FormButtons({ onSave, onCancel }) {
+  return <div className="form-buttons"><button className="btn" onClick={onSave}>Save</button><button className="btn secondary" onClick={onCancel}>Cancel</button></div>
+}
+
+function Metric({ value, label }) {
+  return <div className="metric-tile"><div className="metric-num">{value}</div><div className="metric-lbl">{label}</div></div>
 }

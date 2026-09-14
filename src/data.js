@@ -1,5 +1,5 @@
 // Bumped cache key to v6 to force every browser to load the expanded dataset.
-const LS_KEY = 'hpp-subs-v14';
+const LS_KEY = 'hpp-subs-v15';
 const LS_KEY_RFQS = 'hpp-rfqs-v2';
 const LS_KEY_PROJECTS = 'hpp-projects-v2';
 
@@ -69,6 +69,7 @@ function migrate(sub) {
     projectScales: sub.projectScales || [],
     attachments: sub.attachments || [],
     visibleToBUs: sub.visibleToBUs ?? null,
+    locationAccuracy: sub.locationAccuracy || (sub.lat != null && sub.lng != null ? 'exact' : 'unknown'),
   };
 }
 
@@ -97,7 +98,7 @@ export async function loadSubs() {
   localStorage.removeItem('hpp-subs-v11');
   localStorage.removeItem('hpp-subs-v12');
   localStorage.removeItem('hpp-subs-v13');
-  const res = await fetch('/subcontractors.json?v=14', { cache: 'no-store' });
+  const res = await fetch('/subcontractors.json?v=15', { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Unable to load subcontractors.json (${res.status})`);
   }

@@ -34,6 +34,9 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
           </div>
           <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             <span className={'pill pill-' + statusKey}>{sub.status || 'New'}</span>
+            {sub.locationAccuracy === 'approximate' && (
+              <span className="pill pill-approx" title="This point is an approximate city-level location">Approximate location</span>
+            )}
             {distance != null && (
               <span className="pill pill-distance">{distance.toFixed(0)} mi from job</span>
             )}

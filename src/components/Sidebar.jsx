@@ -38,6 +38,10 @@ function subCoiSummary(sub) {
   return null // don't clutter cards when everything is fine
 }
 
+function ApproxChip({ sub }) {
+  if (sub.locationAccuracy !== 'approximate') return null
+  return <span className="mini-chip approx-chip" title="Approximate city-level location">Approx</span>
+}
 function CoiChip({ sub }) {
   const s = subCoiSummary(sub)
   if (!s) return null

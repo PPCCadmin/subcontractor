@@ -34,7 +34,7 @@ body {
   font-weight: 400;
 }
 
-.app { display: grid; grid-template-columns: 380px 1fr; height: 100vh; overflow: hidden; }
+.app { display: grid; grid-template-columns: minmax(440px, 34vw) 1fr; height: 100vh; overflow: hidden; }
 
 /* ---------- SIDEBAR ---------- */
 .sidebar {
@@ -637,3 +637,13 @@ body {
   .modal-backdrop { padding: 8px; }
   .modal { max-height: 96vh; }
 }
+
+/* September 14 review updates */
+.list { scrollbar-width: auto; scrollbar-color: var(--hpp-green) #e5e7eb; }
+.list::-webkit-scrollbar { width: 14px; }
+.list::-webkit-scrollbar-track { background: #e5e7eb; }
+.list::-webkit-scrollbar-thumb { background: var(--hpp-green); border: 3px solid #e5e7eb; border-radius: 10px; }
+.list-count { position: sticky; top: 0; z-index: 2; font-size: 13px; padding: 10px 20px; }
+.sub-card { min-height: 82px; }
+.approx-chip, .pill-approx { background: #f3e8ff !important; color: #6b21a8 !important; border: 1px solid #d8b4fe !important; font-weight: 700; }
+@media (max-width: 900px) { .app { grid-template-columns: 1fr; } }

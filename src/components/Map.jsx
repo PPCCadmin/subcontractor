@@ -74,7 +74,10 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
           ],
           'circle-color': STATUS_COLOR_EXPR,
           'circle-stroke-width': [
-            'case', ['boolean', ['feature-state', 'selected'], false], 4, 2
+            'case',
+            ['boolean', ['feature-state', 'selected'], false], 4,
+            ['==', ['get', 'locationAccuracy'], 'approximate'], 3,
+            2
           ],
           'circle-stroke-color': [
             'case', ['boolean', ['feature-state', 'selected'], false], '#1a5c38', '#ffffff'
@@ -114,7 +117,7 @@ export default function MapView({ subs, filteredIds, jobLocation, radius, select
         type: 'Feature',
         id: s._numericId,
         geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
-        properties: { id: s.id, status: s.status || 'New', name: s.companyName }
+        properties: { id: s.id, status: s.status || 'New', name: s.companyName, locationAccuracy: s.locationAccuracy || 'unknown' }
       })
     }
     src.setData({ type: 'FeatureCollection', features })

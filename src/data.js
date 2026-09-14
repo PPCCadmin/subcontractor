@@ -1,4 +1,4 @@
-const LS_KEY = 'hpp-subs-v16'
+const LS_KEY = 'hpp-subs-v17'
 const LS_KEY_RFQS = 'hpp-rfqs-v2'
 const LS_KEY_PROJECTS = 'hpp-projects-v2'
 
@@ -96,11 +96,11 @@ function migrate(sub) {
 }
 
 export async function loadSubs() {
-  for (let version = 1; version <= 15; version += 1) {
+  for (let version = 1; version <= 16; version += 1) {
     localStorage.removeItem(`hpp-subs-v${version}`)
   }
 
-  const response = await fetch('/subcontractors.json?v=16', {
+  const response = await fetch('/subcontractors.json?v=17', {
     cache: 'no-store',
     credentials: 'same-origin',
   })

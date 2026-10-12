@@ -18,6 +18,7 @@ const ADMIN_EMAILS = [
   'luke.norvid@heartlandpavingpartners.com',
   'lisa.callahan@heartlandpavingsolutions.com',
   'todd.koehler@heartlandpavingpartners.com',
+  'ron.repking@heartlandpavingpartners.com',
   ...String(process.env.ADMIN_EMAILS || '').split(','),
 ].map(email => email.trim().toLowerCase()).filter(Boolean)
 

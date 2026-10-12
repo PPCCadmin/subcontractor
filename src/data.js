@@ -1,4 +1,5 @@
-const LS_KEY = 'hpp-subs-v18'
+import { getSubs } from './lib/api.js'
+
 const LS_KEY_PROJECTS = 'hpp-projects-v2'
 
 function normalizedServices(sub) {
@@ -18,7 +19,7 @@ function normalizedServices(sub) {
   return services
 }
 
-function migrate(sub) {
+export function migrate(sub) {
   let contacts = sub.contacts
 
   if (!contacts) {
@@ -72,25 +73,18 @@ function migrate(sub) {
   }
 }
 
+// Loads every subcontractor (seed data merged with saved edits) from the server.
+// Returns { subs, saving } where saving is false until server storage is set up.
 export async function loadSubs() {
-  for (let version = 1; version <= 17; version += 1) {
+  for (let version = 1; version <= 18; version += 1) {
     localStorage.removeItem(`hpp-subs-v${version}`)
   }
+  localStorage.removeItem('hpp-rfqs-v2')
 
-  const response = await fetch('/subcontractors.json?v=18', {
-    cache: 'no-store',
-    credentials: 'same-origin',
-  })
-
-  if (!response.ok) throw new Error(`Unable to load subcontractors.json (${response.status})`)
-
-  const data = await response.json()
-  if (!Array.isArray(data)) throw new Error('subcontractors.json did not return an array')
-
-  return data.map(migrate)
+  const data = await getSubs()
+  if (!Array.isArray(data.subs)) throw new Error('Server did not return a subcontractor list')
+  return { subs: data.subs.map(migrate), saving: Boolean(data.saving) }
 }
-
-export function saveSubs() {}
 
 export function loadProjects() {
   try { return JSON.parse(localStorage.getItem(LS_KEY_PROJECTS) || '[]') } catch { return [] }

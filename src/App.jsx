@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import MapView from './components/Map.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import SubDetail from './components/SubDetail.jsx'
@@ -6,9 +6,12 @@ import AddSubModal from './components/AddSubModal.jsx'
 import CsvImportModal from './components/CsvImportModal.jsx'
 import TopNav from './components/TopNav.jsx'
 import Dashboard from './components/Dashboard.jsx'
-import { loadSubs, saveSubs, loadProjects, saveProjects, STATUSES, visibleSubsForRole } from './data.js'
+import { loadSubs, migrate, loadProjects, saveProjects, STATUSES, visibleSubsForRole } from './data.js'
 import * as turf from '@turf/turf'
 import { fetchUser, canEdit } from './lib/auth.js'
+import { saveSub, createSubs, rateSub, unrateSub } from './lib/api.js'
+
+const SAVE_DELAY_MS = 800
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -16,6 +19,9 @@ export default function App() {
   const [subs, setSubs] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
+  const [savingEnabled, setSavingEnabled] = useState(false)
+  const [saveState, setSaveState] = useState({ status: 'idle' })
+  const pendingSaves = useRef(new Map())
   const [tab, setTab] = useState('map')
   const [jobLocation, setJobLocation] = useState(null)
   const [radius, setRadius] = useState(50)
@@ -38,14 +44,14 @@ export default function App() {
   useEffect(() => {
     loadSubs()
       .then(data => {
-        setSubs(data.map((sub, index) => ({ ...sub, _numericId: index + 1 })))
+        setSubs(data.subs.map((sub, index) => ({ ...sub, _numericId: index + 1 })))
+        setSavingEnabled(data.saving)
         setProjects(loadProjects())
       })
       .catch(error => console.error('Failed to load SubFinder data:', error))
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { if (subs.length) saveSubs(subs) }, [subs])
   useEffect(() => { saveProjects(projects) }, [projects])
 
   const role = user?.role || 'hps'
@@ -83,22 +89,64 @@ export default function App() {
   const mappedCount = useMemo(() => filtered.filter(sub => sub.lat != null && sub.lng != null).length, [filtered])
   const selectedSub = visibleSubs.find(sub => sub.id === selectedId) || null
 
+  // Edits apply on screen immediately and are saved to the server once the
+  // user pauses typing, so a burst of keystrokes becomes one save.
+  const flushSave = (id, options) => {
+    const pending = pendingSaves.current.get(id)
+    if (!pending) return
+    clearTimeout(pending.timer)
+    pendingSaves.current.delete(id)
+    setSaveState({ status: 'saving' })
+    saveSub(pending.sub, options)
+      .then(() => { if (!pendingSaves.current.size) setSaveState({ status: 'saved' }) })
+      .catch(error => setSaveState({ status: 'error', message: error.message }))
+  }
+
+  useEffect(() => {
+    const flushAll = event => {
+      if (!pendingSaves.current.size) return
+      for (const id of [...pendingSaves.current.keys()]) flushSave(id, { keepalive: true })
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', flushAll)
+    return () => window.removeEventListener('beforeunload', flushAll)
+  }, [])
+
   const updateSub = updated => {
     if (!admin) return
     setSubs(previous => previous.map(sub => sub.id === updated.id ? updated : sub))
+    if (!savingEnabled) return
+    const existing = pendingSaves.current.get(updated.id)
+    if (existing) clearTimeout(existing.timer)
+    pendingSaves.current.set(updated.id, { sub: updated, timer: setTimeout(() => flushSave(updated.id), SAVE_DELAY_MS) })
+    setSaveState({ status: 'pending' })
   }
-  const createSub = sub => {
-    if (!admin) return
-    setSubs(previous => [...previous, { ...sub, _numericId: previous.length + 1 }])
-    setSelectedId(sub.id)
-  }
-  const createManySubs = newSubs => {
-    if (!admin) return
+
+  const addCreated = created => {
+    const migrated = created.map(migrate)
     setSubs(previous => [
       ...previous,
-      ...newSubs.map((sub, index) => ({ ...sub, _numericId: previous.length + index + 1 })),
+      ...migrated.map((sub, index) => ({ ...sub, _numericId: previous.length + index + 1 })),
     ])
+    return migrated
   }
+
+  // Throws on failure so the Add / Import dialogs can stay open and show it.
+  const createSub = async sub => {
+    if (!admin) return
+    const [created] = addCreated(await createSubs([sub]))
+    setSelectedId(created.id)
+  }
+  const createManySubs = async newSubs => {
+    if (!admin) return
+    addCreated(await createSubs(newSubs))
+  }
+
+  // Ratings go straight to the server, which records who left each one.
+  const applyRatings = saved => setSubs(previous => previous.map(sub => sub.id === saved.id ? { ...sub, ratings: saved.ratings || [] } : sub))
+  const rate = (id, stars, comment) => rateSub(id, stars, comment).then(applyRatings)
+  const unrate = id => unrateSub(id).then(applyRatings)
   const openSubFromDashboard = id => {
     setSelectedId(id)
     setTab('map')
@@ -110,6 +158,12 @@ export default function App() {
   return (
     <div className="app-root">
       <TopNav active={tab} onChange={setTab} user={user} />
+
+      {admin && !savingEnabled && (
+        <div className="banner banner-warn app-banner">
+          Saving isn't set up on the server yet, so changes you make won't be kept after you leave the page.
+        </div>
+      )}
 
       {tab === 'map' && (
         <div className="app">
@@ -163,6 +217,9 @@ export default function App() {
                 projects={projects}
                 canEdit={admin}
                 user={user}
+                saveState={saveState}
+                onRate={rate}
+                onUnrate={unrate}
                 onClose={() => setSelectedId(null)}
                 onChange={updateSub}
               />

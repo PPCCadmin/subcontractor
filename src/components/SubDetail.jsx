@@ -16,7 +16,7 @@ import * as turf from '@turf/turf'
 
 const TABS = ['Info', 'Ratings', 'Contacts', 'Equipment', 'Licenses', 'Files', 'Metrics']
 
-export default function SubDetail({ sub, jobLocation, projects = [], canEdit = false, user = null, onClose, onChange }) {
+export default function SubDetail({ sub, jobLocation, projects = [], canEdit = false, user = null, saveState, onRate, onUnrate, onClose, onChange }) {
   const [tab, setTab] = useState('Info')
   if (!sub) return null
 
@@ -43,6 +43,7 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
               </button>
             )}
             {!canEdit && <span className="pill pill-readonly">Read only</span>}
+            {canEdit && <SaveStatus state={saveState} />}
           </div>
         </div>
         <button className="close-btn" onClick={onClose}><CloseIcon /></button>
@@ -56,7 +57,7 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
 
       <div className="detail-body">
         {tab === 'Info' && <InfoTab sub={sub} patch={patch} canEdit={canEdit} />}
-        {tab === 'Ratings' && <RatingsTab sub={sub} patch={patch} canEdit={canEdit} user={user} />}
+        {tab === 'Ratings' && <RatingsTab sub={sub} canEdit={canEdit} user={user} onRate={onRate} onUnrate={onUnrate} />}
         {tab === 'Contacts' && <ContactsTab sub={sub} patch={patch} canEdit={canEdit} />}
         {tab === 'Equipment' && <EquipmentTab sub={sub} patch={patch} canEdit={canEdit} />}
         {tab === 'Licenses' && <LicensesTab sub={sub} patch={patch} canEdit={canEdit} />}
@@ -161,13 +162,35 @@ function InfoTab({ sub, patch, canEdit }) {
   )
 }
 
-function RatingsTab({ sub, patch, canEdit, user }) {
+function SaveStatus({ state }) {
+  if (!state || state.status === 'idle') return null
+  if (state.status === 'error') return <span className="save-status save-error" title={state.message}>Not saved: {state.message}</span>
+  if (state.status === 'saved') return <span className="save-status">All changes saved</span>
+  return <span className="save-status">Saving…</span>
+}
+
+function RatingsTab({ sub, canEdit, user, onRate, onUnrate }) {
   const ratings = sub.ratings || []
   const me = (user?.email || '').toLowerCase()
   const mine = ratings.find(item => item.byEmail === me)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ stars: 0, comment: '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const summary = ratingSummary(sub)
+
+  const run = async action => {
+    setBusy(true)
+    setError('')
+    try {
+      await action()
+      setEditing(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const startEdit = () => {
     setForm({ stars: mine?.stars || 0, comment: mine?.comment || '' })
@@ -175,23 +198,11 @@ function RatingsTab({ sub, patch, canEdit, user }) {
   }
 
   const save = () => {
-    if (!form.stars) return alert('Pick 1 to 5 stars')
-    const entry = {
-      id: mine?.id || crypto.randomUUID(),
-      stars: form.stars,
-      comment: form.comment.trim(),
-      byEmail: me,
-      byName: user?.name || me || 'Admin',
-      date: new Date().toISOString().slice(0, 10),
-    }
-    patch({ ratings: mine ? ratings.map(item => item.id === mine.id ? entry : item) : [...ratings, entry] })
-    setEditing(false)
+    if (!form.stars) return setError('Pick 1 to 5 stars.')
+    run(() => onRate(sub.id, form.stars, form.comment.trim()))
   }
 
-  const remove = () => {
-    patch({ ratings: ratings.filter(item => item.id !== mine.id) })
-    setEditing(false)
-  }
+  const remove = () => run(() => onUnrate(sub.id))
 
   const sorted = [...ratings].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
 
@@ -213,11 +224,12 @@ function RatingsTab({ sub, patch, canEdit, user }) {
         <Section title="Your Rating">
           {editing ? (
             <div className="inline-form">
-              <StarInput value={form.stars} onChange={stars => setForm({ ...form, stars })} />
+              <StarInput value={form.stars} onChange={stars => setForm(previous => ({ ...previous, stars }))} />
               <Field label="Why this rating?">
-                <textarea value={form.comment} onChange={event => setForm({ ...form, comment: event.target.value })} placeholder="Quality of work, schedule, communication, would you use them again?" />
+                <textarea value={form.comment} onChange={event => { const comment = event.target.value; setForm(previous => ({ ...previous, comment })) }} placeholder="Quality of work, schedule, communication, would you use them again?" />
               </Field>
-              <FormButtons onSave={save} onCancel={() => setEditing(false)} />
+              {error && <div className="form-error">{error}</div>}
+              <FormButtons onSave={save} onCancel={() => setEditing(false)} disabled={busy} />
             </div>
           ) : mine ? (
             <div className="list-item">
@@ -225,8 +237,9 @@ function RatingsTab({ sub, patch, canEdit, user }) {
                 <div className="li-name"><StarDisplay value={mine.stars} /><span className="li-meta">{mine.date}</span></div>
                 {mine.comment && <div className="rating-comment">{mine.comment}</div>}
               </div>
-              <button className="btn secondary btn-sm" onClick={startEdit}>Edit</button>
-              <button className="icon-only-btn" title="Remove my rating" onClick={remove}><TrashIcon /></button>
+              <button className="btn secondary btn-sm" onClick={startEdit} disabled={busy}>Edit</button>
+              <button className="icon-only-btn" title="Remove my rating" onClick={remove} disabled={busy}><TrashIcon /></button>
+              {error && <div className="form-error">{error}</div>}
             </div>
           ) : <button className="btn secondary add-row-btn" onClick={startEdit}><PlusIcon /> Rate this subcontractor</button>}
         </Section>
@@ -457,8 +470,8 @@ function Field({ label, children }) {
   return <div className="field">{label && <label>{label}</label>}{children}</div>
 }
 
-function FormButtons({ onSave, onCancel }) {
-  return <div className="form-buttons"><button className="btn" onClick={onSave}>Save</button><button className="btn secondary" onClick={onCancel}>Cancel</button></div>
+function FormButtons({ onSave, onCancel, disabled = false }) {
+  return <div className="form-buttons"><button className="btn" onClick={onSave} disabled={disabled}>{disabled ? 'Saving…' : 'Save'}</button><button className="btn secondary" onClick={onCancel} disabled={disabled}>Cancel</button></div>
 }
 
 function Metric({ value, label }) {

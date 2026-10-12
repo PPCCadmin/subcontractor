@@ -26,13 +26,17 @@ export default function CsvImportModal({ existingSubs, onClose, onImport }) {
     })
   }
 
-  const doImport = () => {
+  const doImport = async () => {
     if (!parsed) return
     setImporting(true)
-    const built = parsed.newRows.map(buildSub)
-    onImport(built)
-    setImporting(false)
-    onClose()
+    try {
+      await onImport(parsed.newRows.map(buildSub))
+      onClose()
+    } catch (error) {
+      alert(`Import failed: ${error.message}`)
+    } finally {
+      setImporting(false)
+    }
   }
 
   return (

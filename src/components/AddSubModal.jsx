@@ -34,12 +34,16 @@ export default function AddSubModal({ existingSubs, onClose, onCreate }) {
     if (form.companyName.trim()) setDuplicate(findDuplicate(existingSubs, form))
   }
 
-  const submit = force => {
+  const submit = async force => {
     if (!form.companyName.trim()) return alert('Company name is required.')
     const match = findDuplicate(existingSubs, form)
     if (match && !force) return setDuplicate(match)
-    onCreate(buildSub(form))
-    onClose()
+    try {
+      await onCreate(buildSub(form))
+      onClose()
+    } catch (error) {
+      alert(`Could not add subcontractor: ${error.message}`)
+    }
   }
 
   return (

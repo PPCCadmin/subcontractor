@@ -1,5 +1,4 @@
 const LS_KEY = 'hpp-subs-v18'
-const LS_KEY_RFQS = 'hpp-rfqs-v2'
 const LS_KEY_PROJECTS = 'hpp-projects-v2'
 
 function normalizedServices(sub) {
@@ -68,6 +67,7 @@ function migrate(sub) {
     projectScales: sub.projectScales || [],
     attachments: (sub.attachments || []).filter(file => file.type !== 'COI'),
     visibleToBUs: sub.visibleToBUs ?? null,
+    ratings: sub.ratings || (sub.rating ? [{ id: `imported-${sub.id}`, stars: sub.rating, byEmail: '', byName: 'Imported rating', comment: '', date: null }] : []),
     locationAccuracy: sub.locationAccuracy || (sub.lat != null && sub.lng != null ? 'exact' : 'unknown'),
   }
 }
@@ -91,14 +91,6 @@ export async function loadSubs() {
 }
 
 export function saveSubs() {}
-
-export function loadRfqs() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY_RFQS) || '[]') } catch { return [] }
-}
-
-export function saveRfqs(value) {
-  localStorage.setItem(LS_KEY_RFQS, JSON.stringify(value))
-}
 
 export function loadProjects() {
   try { return JSON.parse(localStorage.getItem(LS_KEY_PROJECTS) || '[]') } catch { return [] }

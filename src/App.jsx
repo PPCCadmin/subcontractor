@@ -6,34 +6,14 @@ import AddSubModal from './components/AddSubModal.jsx'
 import CsvImportModal from './components/CsvImportModal.jsx'
 import TopNav from './components/TopNav.jsx'
 import Dashboard from './components/Dashboard.jsx'
-import RfqView from './components/RfqView.jsx'
-import { loadSubs, saveSubs, loadRfqs, saveRfqs, loadProjects, saveProjects, STATUSES, visibleSubsForRole } from './data.js'
+import { loadSubs, saveSubs, loadProjects, saveProjects, STATUSES, visibleSubsForRole } from './data.js'
 import * as turf from '@turf/turf'
-
-const ADMIN_EMAILS = new Set([
-  'luke.norvid@heartlandpavingpartners.com',
-  'todd.koehler@heartlandpavingpartners.com',
-  'lisa.callahan@heartlandpavingsolutions.com',
-])
-
-const FALLBACK_USER = {
-  authenticated: true,
-  name: 'HPP User',
-  email: '',
-  role: 'hps',
-  bu: null,
-  roles: [],
-}
-
-function claimValue(claims, type) {
-  return claims?.find(claim => claim.typ === type)?.val || ''
-}
+import { fetchUser, canEdit } from './lib/auth.js'
 
 export default function App() {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [subs, setSubs] = useState([])
-  const [rfqs, setRfqs] = useState([])
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('map')
@@ -50,45 +30,8 @@ export default function App() {
   })
 
   useEffect(() => {
-    fetch('/.auth/me', { credentials: 'include', cache: 'no-store', redirect: 'manual' })
-      .then(async response => {
-        if (!response.ok) throw new Error(`Authentication check failed: ${response.status}`)
-        const contentType = response.headers.get('content-type') || ''
-        if (!contentType.includes('application/json')) throw new Error('Easy Auth identity endpoint did not return JSON')
-        return response.json()
-      })
-      .then(data => {
-        const containerPrincipal = Array.isArray(data) ? data[0] : null
-        const staticPrincipal = data?.clientPrincipal || null
-        if (!containerPrincipal && !staticPrincipal) {
-          setUser(FALLBACK_USER)
-          return
-        }
-        const containerClaims = containerPrincipal?.user_claims || []
-        const staticClaims = staticPrincipal?.claims || []
-        const claims = containerClaims.length ? containerClaims : staticClaims
-        const email = String(
-          containerPrincipal?.user_name ||
-          staticPrincipal?.userDetails ||
-          claimValue(claims, 'preferred_username') ||
-          claimValue(claims, 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress') ||
-          claimValue(claims, 'emails') ||
-          ''
-        ).trim().toLowerCase()
-        const name = claimValue(claims, 'name') || claimValue(claims, 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name') || email || 'HPP User'
-        setUser({
-          authenticated: true,
-          name,
-          email,
-          role: ADMIN_EMAILS.has(email) ? 'admin' : 'hps',
-          bu: null,
-          roles: staticPrincipal?.userRoles || containerPrincipal?.user_roles || [],
-        })
-      })
-      .catch(error => {
-        console.warn('Unable to read Easy Auth identity:', error)
-        setUser(FALLBACK_USER)
-      })
+    fetchUser()
+      .then(setUser)
       .finally(() => setAuthLoading(false))
   }, [])
 
@@ -96,7 +39,6 @@ export default function App() {
     loadSubs()
       .then(data => {
         setSubs(data.map((sub, index) => ({ ...sub, _numericId: index + 1 })))
-        setRfqs(loadRfqs())
         setProjects(loadProjects())
       })
       .catch(error => console.error('Failed to load SubFinder data:', error))
@@ -104,11 +46,10 @@ export default function App() {
   }, [])
 
   useEffect(() => { if (subs.length) saveSubs(subs) }, [subs])
-  useEffect(() => { saveRfqs(rfqs) }, [rfqs])
   useEffect(() => { saveProjects(projects) }, [projects])
 
   const role = user?.role || 'hps'
-  const admin = role === 'admin'
+  const admin = canEdit(user)
   const visibleSubs = useMemo(() => visibleSubsForRole(subs, role), [subs, role])
 
   const filtered = useMemo(() => {
@@ -142,15 +83,22 @@ export default function App() {
   const mappedCount = useMemo(() => filtered.filter(sub => sub.lat != null && sub.lng != null).length, [filtered])
   const selectedSub = visibleSubs.find(sub => sub.id === selectedId) || null
 
-  const updateSub = updated => setSubs(previous => previous.map(sub => sub.id === updated.id ? updated : sub))
+  const updateSub = updated => {
+    if (!admin) return
+    setSubs(previous => previous.map(sub => sub.id === updated.id ? updated : sub))
+  }
   const createSub = sub => {
+    if (!admin) return
     setSubs(previous => [...previous, { ...sub, _numericId: previous.length + 1 }])
     setSelectedId(sub.id)
   }
-  const createManySubs = newSubs => setSubs(previous => [
-    ...previous,
-    ...newSubs.map((sub, index) => ({ ...sub, _numericId: previous.length + index + 1 })),
-  ])
+  const createManySubs = newSubs => {
+    if (!admin) return
+    setSubs(previous => [
+      ...previous,
+      ...newSubs.map((sub, index) => ({ ...sub, _numericId: previous.length + index + 1 })),
+    ])
+  }
   const openSubFromDashboard = id => {
     setSelectedId(id)
     setTab('map')
@@ -212,9 +160,9 @@ export default function App() {
               <SubDetail
                 sub={selectedSub}
                 jobLocation={jobLocation}
-                rfqs={rfqs}
                 projects={projects}
                 canEdit={admin}
+                user={user}
                 onClose={() => setSelectedId(null)}
                 onChange={updateSub}
               />
@@ -231,8 +179,6 @@ export default function App() {
           onOpenSub={openSubFromDashboard}
         />
       )}
-
-      {tab === 'rfqs' && <RfqView rfqs={rfqs} setRfqs={setRfqs} subs={visibleSubs} />}
 
       {showAdd && admin && (
         <AddSubModal existingSubs={subs} onClose={() => setShowAdd(false)} onCreate={createSub} />

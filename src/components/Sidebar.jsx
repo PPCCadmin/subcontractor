@@ -2,6 +2,8 @@ import React from 'react'
 import { SERVICE_TAXONOMY, STATUSES } from '../data.js'
 import { SearchIcon, MapPinIcon, PlusIcon, UploadIcon } from './icons.jsx'
 import * as turf from '@turf/turf'
+import { ratingSummary } from '../lib/metrics.js'
+import { StarDisplay } from './Stars.jsx'
 
 function StatusPill({ status }) {
   if (!status) return null
@@ -11,6 +13,16 @@ function StatusPill({ status }) {
 function ApproxChip({ sub }) {
   if (sub.locationAccuracy !== 'approximate') return null
   return <span className="mini-chip approx-chip" title="Approximate city-level location">Approx</span>
+}
+
+function RatingChip({ sub }) {
+  const { average, count } = ratingSummary(sub)
+  if (!count) return null
+  return (
+    <span className="sub-rating" title={`${average.toFixed(1)} average from ${count} rating${count === 1 ? '' : 's'}`}>
+      <StarDisplay value={average} size={11} /> {average.toFixed(1)} <span className="sub-rating-count">({count})</span>
+    </span>
+  )
 }
 
 export default function Sidebar({
@@ -215,6 +227,7 @@ export default function Sidebar({
             <div className="sub-meta">
               <StatusPill status={sub.status} />
               <ApproxChip sub={sub} />
+              <RatingChip sub={sub} />
               {sub.city && <span className="sub-city">{sub.city}, {sub.state}</span>}
             </div>
             {sub.canonicalServices?.length > 0 && (

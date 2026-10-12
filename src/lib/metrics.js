@@ -24,15 +24,11 @@ export function complianceStatus(sub) {
   return 'compliant';
 }
 
-export function subHitRate(subId, rfqs) {
-  let invited = 0, awarded = 0;
-  for (const r of rfqs) {
-    const inv = (r.invitees || []).find(i => i.subId === subId);
-    if (!inv) continue;
-    invited++;
-    if (inv.awarded) awarded++;
-  }
-  return { invited, awarded, rate: invited ? awarded / invited : null };
+// Star ratings left by editors: [{ id, stars, byEmail, byName, comment, date }]
+export function ratingSummary(sub) {
+  const stars = (sub.ratings || []).map(r => r.stars).filter(n => n >= 1 && n <= 5)
+  if (!stars.length) return { average: null, count: 0 }
+  return { average: stars.reduce((a, b) => a + b, 0) / stars.length, count: stars.length }
 }
 
 export function subAvgRating(subId, projects) {

@@ -10,20 +10,22 @@ import {
   STATUSES,
 } from '../data.js'
 import { CloseIcon, TrashIcon, UploadIcon, DownloadIcon, PhoneIcon, PlusIcon, WarningIcon } from './icons.jsx'
-import { subHitRate, daysUntil } from '../lib/metrics.js'
+import { daysUntil, ratingSummary } from '../lib/metrics.js'
+import { StarDisplay, StarInput } from './Stars.jsx'
 import * as turf from '@turf/turf'
 
-const TABS = ['Info', 'Contacts', 'Equipment', 'Licenses', 'Files', 'Metrics']
+const TABS = ['Info', 'Ratings', 'Contacts', 'Equipment', 'Licenses', 'Files', 'Metrics']
 
-export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], onClose, onChange }) {
+export default function SubDetail({ sub, jobLocation, projects = [], canEdit = false, user = null, onClose, onChange }) {
   const [tab, setTab] = useState('Info')
   if (!sub) return null
 
-  const patch = changes => onChange({ ...sub, ...changes })
+  const patch = changes => { if (canEdit) onChange({ ...sub, ...changes }) }
   const distance = jobLocation && sub.lat != null && sub.lng != null
     ? turf.distance(turf.point([jobLocation.lng, jobLocation.lat]), turf.point([sub.lng, sub.lat]), { units: 'miles' })
     : null
   const statusKey = (sub.status || 'New').replace(/\s+/g, '')
+  const rating = ratingSummary(sub)
 
   return (
     <div className="detail">
@@ -35,6 +37,12 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
             <span className={`pill pill-${statusKey}`}>{sub.status || 'New'}</span>
             {sub.locationAccuracy === 'approximate' && <span className="pill pill-approx">Approximate location</span>}
             {distance != null && <span className="pill pill-distance">{distance.toFixed(0)} mi from job</span>}
+            {rating.count > 0 && (
+              <button type="button" className="pill pill-rating" onClick={() => setTab('Ratings')} title="See ratings">
+                <StarDisplay value={rating.average} size={12} /> {rating.average.toFixed(1)} ({rating.count})
+              </button>
+            )}
+            {!canEdit && <span className="pill pill-readonly">Read only</span>}
           </div>
         </div>
         <button className="close-btn" onClick={onClose}><CloseIcon /></button>
@@ -47,18 +55,19 @@ export default function SubDetail({ sub, jobLocation, rfqs = [], projects = [], 
       </div>
 
       <div className="detail-body">
-        {tab === 'Info' && <InfoTab sub={sub} patch={patch} />}
-        {tab === 'Contacts' && <ContactsTab sub={sub} patch={patch} />}
-        {tab === 'Equipment' && <EquipmentTab sub={sub} patch={patch} />}
-        {tab === 'Licenses' && <LicensesTab sub={sub} patch={patch} />}
-        {tab === 'Files' && <FilesTab sub={sub} patch={patch} />}
-        {tab === 'Metrics' && <MetricsTab sub={sub} rfqs={rfqs} projects={projects} />}
+        {tab === 'Info' && <InfoTab sub={sub} patch={patch} canEdit={canEdit} />}
+        {tab === 'Ratings' && <RatingsTab sub={sub} patch={patch} canEdit={canEdit} user={user} />}
+        {tab === 'Contacts' && <ContactsTab sub={sub} patch={patch} canEdit={canEdit} />}
+        {tab === 'Equipment' && <EquipmentTab sub={sub} patch={patch} canEdit={canEdit} />}
+        {tab === 'Licenses' && <LicensesTab sub={sub} patch={patch} canEdit={canEdit} />}
+        {tab === 'Files' && <FilesTab sub={sub} patch={patch} canEdit={canEdit} />}
+        {tab === 'Metrics' && <MetricsTab sub={sub} projects={projects} />}
       </div>
     </div>
   )
 }
 
-function InfoTab({ sub, patch }) {
+function InfoTab({ sub, patch, canEdit }) {
   const toggleService = service => {
     const current = sub.canonicalServices || []
     patch({ canonicalServices: current.includes(service) ? current.filter(item => item !== service) : [...current, service] })
@@ -70,7 +79,7 @@ function InfoTab({ sub, patch }) {
   }
 
   return (
-    <>
+    <fieldset className="readonly-fieldset" disabled={!canEdit}>
       <Section title="Overview">
         <div className="field-row">
           <Field label="Status">
@@ -148,11 +157,102 @@ function InfoTab({ sub, patch }) {
       <Section title="Notes">
         <Field label=""><textarea value={sub.notes || ''} onChange={event => patch({ notes: event.target.value })} placeholder="Relationship context, travel exceptions, strengths, weaknesses, and vetting notes" /></Field>
       </Section>
+    </fieldset>
+  )
+}
+
+function RatingsTab({ sub, patch, canEdit, user }) {
+  const ratings = sub.ratings || []
+  const me = (user?.email || '').toLowerCase()
+  const mine = ratings.find(item => item.byEmail === me)
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ stars: 0, comment: '' })
+  const summary = ratingSummary(sub)
+
+  const startEdit = () => {
+    setForm({ stars: mine?.stars || 0, comment: mine?.comment || '' })
+    setEditing(true)
+  }
+
+  const save = () => {
+    if (!form.stars) return alert('Pick 1 to 5 stars')
+    const entry = {
+      id: mine?.id || crypto.randomUUID(),
+      stars: form.stars,
+      comment: form.comment.trim(),
+      byEmail: me,
+      byName: user?.name || me || 'Admin',
+      date: new Date().toISOString().slice(0, 10),
+    }
+    patch({ ratings: mine ? ratings.map(item => item.id === mine.id ? entry : item) : [...ratings, entry] })
+    setEditing(false)
+  }
+
+  const remove = () => {
+    patch({ ratings: ratings.filter(item => item.id !== mine.id) })
+    setEditing(false)
+  }
+
+  const sorted = [...ratings].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+
+  return (
+    <>
+      <Section title="Overall Rating">
+        {summary.count ? (
+          <div className="rating-summary">
+            <div className="rating-big">{summary.average.toFixed(1)}</div>
+            <div>
+              <StarDisplay value={summary.average} size={20} />
+              <div className="li-meta">Average of {summary.count} rating{summary.count === 1 ? '' : 's'}</div>
+            </div>
+          </div>
+        ) : <div className="li-meta">No ratings yet.</div>}
+      </Section>
+
+      {canEdit && (
+        <Section title="Your Rating">
+          {editing ? (
+            <div className="inline-form">
+              <StarInput value={form.stars} onChange={stars => setForm({ ...form, stars })} />
+              <Field label="Why this rating?">
+                <textarea value={form.comment} onChange={event => setForm({ ...form, comment: event.target.value })} placeholder="Quality of work, schedule, communication, would you use them again?" />
+              </Field>
+              <FormButtons onSave={save} onCancel={() => setEditing(false)} />
+            </div>
+          ) : mine ? (
+            <div className="list-item">
+              <div className="list-item-content">
+                <div className="li-name"><StarDisplay value={mine.stars} /><span className="li-meta">{mine.date}</span></div>
+                {mine.comment && <div className="rating-comment">{mine.comment}</div>}
+              </div>
+              <button className="btn secondary btn-sm" onClick={startEdit}>Edit</button>
+              <button className="icon-only-btn" title="Remove my rating" onClick={remove}><TrashIcon /></button>
+            </div>
+          ) : <button className="btn secondary add-row-btn" onClick={startEdit}><PlusIcon /> Rate this subcontractor</button>}
+        </Section>
+      )}
+
+      <Section title={`All Ratings (${ratings.length})`}>
+        {sorted.map(item => (
+          <div key={item.id} className="list-item">
+            <div className="list-item-content">
+              <div className="li-name">
+                <StarDisplay value={item.stars} />
+                <strong>{item.byName}</strong>
+                {me && item.byEmail === me && <span className="mini-chip">You</span>}
+              </div>
+              {item.comment && <div className="rating-comment">{item.comment}</div>}
+              {item.date && <div className="li-meta">{item.date}</div>}
+            </div>
+          </div>
+        ))}
+        {!ratings.length && <div className="li-meta">Nobody has rated this subcontractor yet.</div>}
+      </Section>
     </>
   )
 }
 
-function ContactsTab({ sub, patch }) {
+function ContactsTab({ sub, patch, canEdit }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', role: 'Estimator', phone: '', cellPhone: '', email: '' })
   const contacts = sub.contacts || []
@@ -175,11 +275,11 @@ function ContactsTab({ sub, patch }) {
             {contact.cellPhone && <div className="li-meta"><PhoneIcon /> {contact.cellPhone} (cell)</div>}
             {contact.email && <div className="li-meta">{contact.email}</div>}
           </div>
-          <button className="icon-only-btn" onClick={() => patch({ contacts: contacts.filter(item => item.id !== contact.id) })}><TrashIcon /></button>
+          {canEdit && <button className="icon-only-btn" onClick={() => patch({ contacts: contacts.filter(item => item.id !== contact.id) })}><TrashIcon /></button>}
         </div>
       ))}
 
-      {adding ? (
+      {canEdit && (adding ? (
         <div className="inline-form">
           <div className="field-row">
             <Field label="Name"><input value={form.name} onChange={event => set('name', event.target.value)} autoFocus /></Field>
@@ -192,12 +292,12 @@ function ContactsTab({ sub, patch }) {
           <Field label="Email"><input type="email" value={form.email} onChange={event => set('email', event.target.value)} /></Field>
           <FormButtons onSave={add} onCancel={() => setAdding(false)} />
         </div>
-      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add Contact</button>}
+      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add Contact</button>)}
     </Section>
   )
 }
 
-function EquipmentTab({ sub, patch }) {
+function EquipmentTab({ sub, patch, canEdit }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ type: 'Paver', count: 1, ownership: 'Owned' })
   const equipment = sub.equipment || []
@@ -213,11 +313,11 @@ function EquipmentTab({ sub, patch }) {
       {equipment.map(item => (
         <div key={item.id} className="list-item">
           <div className="list-item-content"><div className="li-name"><strong>{item.type}</strong><span className="mini-chip">×{item.count}</span><span className="mini-chip">{item.ownership}</span></div></div>
-          <button className="icon-only-btn" onClick={() => patch({ equipment: equipment.filter(value => value.id !== item.id) })}><TrashIcon /></button>
+          {canEdit && <button className="icon-only-btn" onClick={() => patch({ equipment: equipment.filter(value => value.id !== item.id) })}><TrashIcon /></button>}
         </div>
       ))}
 
-      {adding ? (
+      {canEdit && (adding ? (
         <div className="inline-form">
           <div className="field-row field-row-three">
             <Field label="Type"><select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}>{EQUIPMENT_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>
@@ -226,12 +326,12 @@ function EquipmentTab({ sub, patch }) {
           </div>
           <FormButtons onSave={add} onCancel={() => setAdding(false)} />
         </div>
-      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add Equipment</button>}
+      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add Equipment</button>)}
     </Section>
   )
 }
 
-function LicensesTab({ sub, patch }) {
+function LicensesTab({ sub, patch, canEdit }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ type: 'General Contractor', number: '', state: '', expiration: '' })
   const licenses = sub.licenses || []
@@ -253,12 +353,12 @@ function LicensesTab({ sub, patch }) {
               <div className="li-name"><strong>{license.type}</strong>{license.state && <span className="mini-chip">{license.state}</span>}{days != null && <span className={`mini-chip${days < 0 ? ' chip-expired' : days <= 30 ? ' chip-expiring' : ''}`}>{days < 0 ? `Expired ${Math.abs(days)}d ago` : `${days}d left`}</span>}</div>
               <div className="li-meta">#{license.number}{license.expiration && ` · expires ${license.expiration}`}</div>
             </div>
-            <button className="icon-only-btn" onClick={() => patch({ licenses: licenses.filter(value => value.id !== license.id) })}><TrashIcon /></button>
+            {canEdit && <button className="icon-only-btn" onClick={() => patch({ licenses: licenses.filter(value => value.id !== license.id) })}><TrashIcon /></button>}
           </div>
         )
       })}
 
-      {adding ? (
+      {canEdit && (adding ? (
         <div className="inline-form">
           <Field label="Type"><select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}>{LICENSE_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>
           <div className="field-row field-row-three">
@@ -268,12 +368,12 @@ function LicensesTab({ sub, patch }) {
           </div>
           <FormButtons onSave={add} onCancel={() => setAdding(false)} />
         </div>
-      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add License</button>}
+      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add License</button>)}
     </Section>
   )
 }
 
-function FilesTab({ sub, patch }) {
+function FilesTab({ sub, patch, canEdit }) {
   const inputRef = useRef(null)
   const [pending, setPending] = useState(null)
   const attachments = sub.attachments || []
@@ -310,11 +410,11 @@ function FilesTab({ sub, patch }) {
         <div key={file.id} className="list-item">
           <div className="list-item-content"><div className="li-name"><span className="mini-chip">{file.type}</span><span>{file.filename}</span></div><div className="li-meta">{(file.size / 1024).toFixed(1)} KB · uploaded {file.uploadedAt?.slice(0, 10)}</div></div>
           <button className="icon-only-btn" onClick={() => download(file)}><DownloadIcon /></button>
-          <button className="icon-only-btn" onClick={() => patch({ attachments: attachments.filter(value => value.id !== file.id) })}><TrashIcon /></button>
+          {canEdit && <button className="icon-only-btn" onClick={() => patch({ attachments: attachments.filter(value => value.id !== file.id) })}><TrashIcon /></button>}
         </div>
       ))}
 
-      {pending && (
+      {canEdit && pending && (
         <div className="inline-form">
           <div className="li-name"><strong>{pending.filename}</strong><span className="mini-chip">{(pending.size / 1024).toFixed(1)} KB</span></div>
           <Field label="Document Type"><select value={pending.type} onChange={event => setPending({ ...pending, type: event.target.value })}>{ATTACHMENT_TYPES.map(type => <option key={type}>{type}</option>)}</select></Field>
@@ -323,22 +423,18 @@ function FilesTab({ sub, patch }) {
       )}
 
       <input ref={inputRef} type="file" hidden onChange={chooseFile} accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx" />
-      {!pending && <button className="btn secondary add-row-btn" onClick={() => inputRef.current?.click()}><UploadIcon /> Upload File</button>}
+      {canEdit && !pending && <button className="btn secondary add-row-btn" onClick={() => inputRef.current?.click()}><UploadIcon /> Upload File</button>}
     </Section>
   )
 }
 
-function MetricsTab({ sub, rfqs, projects }) {
-  const hitRate = subHitRate(sub.id, rfqs)
+function MetricsTab({ sub, projects }) {
   const subProjects = projects.filter(project => project.subId === sub.id).sort((a, b) => (b.completionDate || '').localeCompare(a.completionDate || ''))
 
   return (
     <>
       <Section title="Performance Metrics">
         <div className="metric-grid">
-          <Metric value={hitRate.invited} label="RFQ Invites" />
-          <Metric value={hitRate.awarded} label="Awards" />
-          <Metric value={hitRate.rate != null ? `${Math.round(hitRate.rate * 100)}%` : '—'} label="Hit Rate" />
           <Metric value={subProjects.length} label="Projects" />
         </div>
       </Section>

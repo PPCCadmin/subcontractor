@@ -4,7 +4,6 @@ import { LOGOUT_URL } from '../lib/auth.js'
 const ALL_TABS = [
   { key: 'map', label: 'Map' },
   { key: 'dashboard', label: 'Dashboard' },
-  { key: 'rfqs', label: 'RFQs', roles: ['admin', 'hps'] },
 ]
 
 function roleLabel(user) {

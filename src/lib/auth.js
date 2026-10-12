@@ -6,19 +6,25 @@
 // /.auth/me and a login endpoint at /.auth/login/aad.
 //
 // Roles:
-//   'admin' -> full access + can add / import / edit (Luke, Lisa, Todd)
-//   'hps'   -> sees ALL vendors, read-only (HPS salespeople soft launch)
+//   'admin' -> can add / import / edit subcontractors (only the users below)
+//   'hps'   -> sees ALL vendors, read-only (everyone else who signs in)
 //   'bu'    -> sees ONLY BU-visible vendors (plants, trucking, aggregate, dumping)
 // -----------------------------------------------------------------------------
 
-// ---- CONFIG: fill these in for your tenant ----------------------------------
+// ---- CONFIG: who can create and edit subcontractors -------------------------
 
-// Emails that get full admin (add / import / edit). Keep lower-case.
+// Emails allowed to add / import / edit subcontractors. This is the ONLY list
+// that grants edit access — everyone else is read-only. Keep lower-case.
 const ADMIN_EMAILS = [
   'luke.norvid@heartlandpavingpartners.com',
   'lisa.callahan@heartlandpavingsolutions.com',
   'todd.koehler@heartlandpavingpartners.com',
 ]
+
+// Optional: Entra ID app roles that also grant edit access. To use, create an
+// app role with one of these values on the app registration, then assign users
+// under Enterprise applications > (app) > Users and groups.
+const ADMIN_APP_ROLES = ['SubcontractorEditor']
 
 // Entra ID group object-IDs that map to a Business Unit. When a signed-in user
 // is a member of one of these groups they are treated as a BU user and only see
@@ -33,7 +39,6 @@ const BU_GROUPS = {
 }
 
 // Role given to an authenticated user we can't otherwise classify.
-// During the HPS-only soft launch this stays 'hps' (full read, no edit).
 const DEFAULT_ROLE = 'hps'
 
 // -----------------------------------------------------------------------------
@@ -41,53 +46,93 @@ const DEFAULT_ROLE = 'hps'
 export const LOGIN_URL = '/.auth/login/aad?post_login_redirect_uri=/'
 export const LOGOUT_URL = '/.auth/logout?post_logout_redirect_uri=/'
 
+export const READ_ONLY_USER = {
+  authenticated: true,
+  name: 'HPP User',
+  email: '',
+  role: DEFAULT_ROLE,
+  bu: null,
+  roles: [],
+}
+
+const ROLE_CLAIM_TYPES = ['roles', 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role']
+const EMAIL_CLAIM_TYPES = ['preferred_username', 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress', 'emails']
+const NAME_CLAIM_TYPES = ['name', 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']
+
+// Reads /.auth/me and returns the signed-in user with a resolved role. Any
+// failure falls back to a read-only user, never to an editor.
 export async function fetchUser() {
+  // Local dev only (stripped from production builds): there is no /.auth/me on
+  // localhost, so `localStorage.setItem('dev-user-email', '<email>')` and reload
+  // to preview the app as that user.
+  if (import.meta.env.DEV) {
+    const devEmail = localStorage.getItem('dev-user-email')
+    if (devEmail) return resolvePrincipal([{ user_name: devEmail, user_claims: [{ typ: 'name', val: `${devEmail} (local)` }] }])
+  }
   try {
-    const res = await fetch('/.auth/me', { headers: { Accept: 'application/json' } })
-    if (!res.ok) return { authenticated: false }
-    const data = await res.json()
-    const cp = Array.isArray(data) ? data[0]?.clientPrincipal : data.clientPrincipal
-    if (!cp) return { authenticated: false }
-    return resolvePrincipal(cp)
-  } catch (e) {
-    return { authenticated: false, error: String(e) }
+    const response = await fetch('/.auth/me', { credentials: 'include', cache: 'no-store', redirect: 'manual' })
+    if (!response.ok) throw new Error(`Authentication check failed: ${response.status}`)
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) throw new Error('Easy Auth identity endpoint did not return JSON')
+    return resolvePrincipal(await response.json())
+  } catch (error) {
+    console.warn('Unable to read Easy Auth identity:', error)
+    return READ_ONLY_USER
   }
 }
 
-function resolvePrincipal(cp) {
-  const email = (cp.userDetails || '').toLowerCase()
-  const claims = cp.claims || []
-  const roles = cp.userRoles || []
-  const groupIds = claims
-    .filter(c => (c.typ || c.type) === 'groups')
-    .map(c => c.val || c.value)
+// Handles both shapes: Container Apps / App Service return an array with
+// user_name + user_claims; Static Web Apps return { clientPrincipal }.
+function resolvePrincipal(data) {
+  const containerPrincipal = Array.isArray(data) ? data[0] : null
+  const staticPrincipal = data?.clientPrincipal || null
+  if (!containerPrincipal && !staticPrincipal) return READ_ONLY_USER
+
+  const containerClaims = containerPrincipal?.user_claims || []
+  const staticClaims = staticPrincipal?.claims || []
+  const claims = containerClaims.length ? containerClaims : staticClaims
+
+  const email = String(
+    containerPrincipal?.user_name ||
+    staticPrincipal?.userDetails ||
+    claimValues(claims, EMAIL_CLAIM_TYPES)[0] ||
+    ''
+  ).trim().toLowerCase()
+
+  const roles = [
+    ...(staticPrincipal?.userRoles || []),
+    ...(containerPrincipal?.user_roles || []),
+    ...claimValues(claims, ROLE_CLAIM_TYPES),
+  ]
+  const groupIds = claimValues(claims, ['groups'])
 
   // Business-unit membership (first match wins)
-  let bu = null
-  for (const gid of groupIds) {
-    if (BU_GROUPS[gid]) { bu = BU_GROUPS[gid]; break }
-  }
+  const bu = groupIds.map(gid => BU_GROUPS[gid]).find(Boolean) || null
 
   let role = DEFAULT_ROLE
-  if (ADMIN_EMAILS.includes(email) || roles.includes('admin')) role = 'admin'
+  if (isAdminIdentity(email, roles)) role = 'admin'
   else if (bu) role = 'bu'
 
   return {
     authenticated: true,
-    name: getClaim(claims, 'name') || cp.userDetails || 'User',
+    name: claimValues(claims, NAME_CLAIM_TYPES)[0] || email || 'HPP User',
     email,
     role,
     bu,
-    raw: cp,
+    roles,
   }
 }
 
-function getClaim(claims, key) {
-  const c = claims.find(x => {
-    const t = x.typ || x.type || ''
-    return t === key || t.endsWith('/' + key)
-  })
-  return c ? (c.val || c.value) : null
+function isAdminIdentity(email, roles) {
+  if (email && ADMIN_EMAILS.includes(email)) return true
+  return roles.some(role => ADMIN_APP_ROLES.includes(role))
+}
+
+function claimValues(claims, types) {
+  return claims
+    .filter(claim => types.includes(claim.typ || claim.type))
+    .map(claim => claim.val || claim.value)
+    .filter(Boolean)
 }
 
 export function isAdmin(user) { return user?.role === 'admin' }

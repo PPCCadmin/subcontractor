@@ -113,10 +113,43 @@ function fileStore(dir) {
   }
 }
 
-export function createStore() {
-  if (process.env.AZURE_STORAGE_CONNECTION_STRING) {
-    return blobStore(process.env.AZURE_STORAGE_CONNECTION_STRING, process.env.STORAGE_CONTAINER || 'subcontractors')
+// Plain-language reason storage can't be used, shown to admins in the app.
+// Never includes the connection string itself.
+export function describeStorageError(error) {
+  const code = error?.code || error?.details?.errorCode || ''
+  if (error?.statusCode === 403 || code === 'AuthenticationFailed') {
+    return 'the storage account rejected the key. Copy the Connection string again from the storage account > Access keys and update the storage-conn secret.'
   }
-  if (process.env.DATA_DIR) return fileStore(path.resolve(process.env.DATA_DIR))
-  return null
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+    return 'the storage account named in the connection string could not be found. Check the AccountName in the connection string.'
+  }
+  if (code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || error?.name === 'AbortError') {
+    return 'the server could not reach the storage account. Check its Networking settings allow access.'
+  }
+  return `storage returned an error (${code || error?.statusCode || error?.message || 'unknown'}).`
+}
+
+// Opens and checks storage. Never throws: a bad setting leaves the app running
+// read-only with `problem` explaining why, instead of crashing the site.
+export async function openStore() {
+  const connectionString = (process.env.AZURE_STORAGE_CONNECTION_STRING || '').trim()
+  let store = null
+  try {
+    if (connectionString) store = blobStore(connectionString, process.env.STORAGE_CONTAINER || 'subcontractors')
+    else if (process.env.DATA_DIR) store = fileStore(path.resolve(process.env.DATA_DIR))
+    else return { store: null, problem: null }
+  } catch {
+    return {
+      store: null,
+      problem: 'the storage connection string is not valid. It should be the full Connection string (starting "DefaultEndpointsProtocol=https;AccountName=") from the storage account > Access keys, not the subscription ID or the key alone.',
+    }
+  }
+
+  try {
+    await store.list()
+    return { store, problem: null }
+  } catch (error) {
+    console.error('Storage check failed:', error?.code || error?.statusCode || error?.message)
+    return { store: null, problem: describeStorageError(error) }
+  }
 }

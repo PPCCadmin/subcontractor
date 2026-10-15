@@ -9,8 +9,9 @@ const ALL_TABS = [
 function roleLabel(user) {
   if (!user) return ''
   if (user.role === 'admin') return 'Admin'
-  if (user.role === 'bu') return user.bu || 'Business Unit'
-  return 'HPS'
+  if (user.role === 'office') return user.office?.name || 'Company'
+  if (user.role === 'hps') return 'HPS'
+  return 'No access'
 }
 
 export default function TopNav({ active, onChange, user }) {

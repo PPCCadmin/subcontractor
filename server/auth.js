@@ -9,6 +9,8 @@
 // buttons.
 // -----------------------------------------------------------------------------
 
+import { officeForEmail, isCorporateEmail } from './offices.js'
+
 // ---- CONFIG: who can create and edit subcontractors -------------------------
 
 // Emails allowed to add / import / edit / rate subcontractors. Keep lower-case.
@@ -62,10 +64,20 @@ export function getUser(req) {
   }
 
   email = email.trim().toLowerCase()
-  if (!email) return { authenticated: false, email: '', name: 'Guest', role: 'hps', roles: [] }
+  if (!email) return { authenticated: false, email: '', name: 'Guest', role: 'none', office: null, roles: [] }
 
+  // Roles:
+  //   admin  -> sees every subcontractor, can add / edit / rate
+  //   hps    -> Heartland corporate, sees every subcontractor, read-only
+  //   office -> company user, sees subcontractors near their office, read-only
+  //   none   -> unrecognised email domain, sees nothing
   const admin = ADMIN_EMAILS.includes(email) || roles.some(role => ADMIN_APP_ROLES.includes(role))
-  return { authenticated: true, email, name: name || email, role: admin ? 'admin' : 'hps', roles }
+  const office = officeForEmail(email)
+  let role = 'none'
+  if (admin) role = 'admin'
+  else if (office) role = 'office'
+  else if (isCorporateEmail(email)) role = 'hps'
+  return { authenticated: true, email, name: name || email, role, office: role === 'office' ? office : null, roles }
 }
 
 export function requireAdmin(req, res, next) {

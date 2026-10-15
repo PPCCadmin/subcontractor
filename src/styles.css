@@ -725,3 +725,7 @@ body {
 .save-error { color: #b91c1c; font-weight: 600; }
 .form-error { margin: 6px 0; color: #b91c1c; font-size: 12px; }
 .app-banner { margin: 0; border-radius: 0; }
+
+.no-access { max-width: 520px; margin: 80px auto; padding: 0 20px; text-align: center; color: var(--text); }
+.no-access h2 { margin: 0 0 8px; font-size: 22px; }
+.no-access p { color: var(--muted); }

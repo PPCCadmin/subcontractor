@@ -114,18 +114,6 @@ export const SERVICE_TAXONOMY = [
   'Testing',
 ]
 
-export const BU_VISIBLE_SERVICES = ['Asphalt Plant', 'Concrete Plant', 'Aggregate', 'Trucking', 'Dumping']
-
-export function isVisibleToBUs(sub) {
-  if (sub.visibleToBUs === true) return true
-  if (sub.visibleToBUs === false) return false
-  return (sub.canonicalServices || []).some(service => BU_VISIBLE_SERVICES.includes(service))
-}
-
-export function visibleSubsForRole(subs, role) {
-  return role === 'bu' ? subs.filter(isVisibleToBUs) : subs
-}
-
 export const BUSINESS_STRUCTURES = ['LLC', 'Corporation', 'S-Corp', 'Partnership', 'Sole Proprietor', 'Other']
 export const CONTACT_ROLES = ['Owner', 'Estimator', 'Accounting', 'Field Operations', 'Project Manager', 'Sales', 'Other']
 export const PROJECT_SCALES = ['< $20k', '$20k–$100k', '$100k–$300k', 'Capital (> $300k)']

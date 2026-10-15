@@ -4,10 +4,11 @@
 // enforces it on every change; the browser only uses the role to show or hide
 // editing controls.
 //
-// Roles:
-//   'admin' -> can add / import / edit / rate subcontractors
-//   'hps'   -> sees ALL vendors, read-only
-//   'bu'    -> sees ONLY BU-visible vendors (plants, trucking, aggregate, dumping)
+// Roles (the server also decides which subcontractors each user receives):
+//   'admin'  -> sees every subcontractor, can add / import / edit / rate
+//   'hps'    -> Heartland corporate, sees every subcontractor, read-only
+//   'office' -> company user, sees subcontractors near their office, read-only
+//   'none'   -> email domain not linked to any company, sees nothing
 // -----------------------------------------------------------------------------
 
 import { getMe } from './api.js'
@@ -19,8 +20,8 @@ export const READ_ONLY_USER = {
   authenticated: true,
   name: 'HPP User',
   email: '',
-  role: 'hps',
-  bu: null,
+  role: 'none',
+  office: null,
   roles: [],
 }
 
@@ -29,7 +30,7 @@ export async function fetchUser() {
   try {
     const me = await getMe()
     if (!me.authenticated) return READ_ONLY_USER
-    return { ...READ_ONLY_USER, ...me, bu: null }
+    return { ...READ_ONLY_USER, ...me }
   } catch (error) {
     console.warn('Unable to read signed-in user:', error)
     return READ_ONLY_USER

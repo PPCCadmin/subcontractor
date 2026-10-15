@@ -6,7 +6,7 @@ import AddSubModal from './components/AddSubModal.jsx'
 import CsvImportModal from './components/CsvImportModal.jsx'
 import TopNav from './components/TopNav.jsx'
 import Dashboard from './components/Dashboard.jsx'
-import { loadSubs, migrate, loadProjects, saveProjects, STATUSES, visibleSubsForRole } from './data.js'
+import { loadSubs, migrate, loadProjects, saveProjects, STATUSES } from './data.js'
 import * as turf from '@turf/turf'
 import { fetchUser, canEdit } from './lib/auth.js'
 import { saveSub, createSubs, rateSub, unrateSub } from './lib/api.js'
@@ -20,6 +20,7 @@ export default function App() {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [savingEnabled, setSavingEnabled] = useState(false)
+  const [savingProblem, setSavingProblem] = useState(null)
   const [saveState, setSaveState] = useState({ status: 'idle' })
   const pendingSaves = useRef(new Map())
   const [tab, setTab] = useState('map')
@@ -46,6 +47,7 @@ export default function App() {
       .then(data => {
         setSubs(data.subs.map((sub, index) => ({ ...sub, _numericId: index + 1 })))
         setSavingEnabled(data.saving)
+        setSavingProblem(data.problem || null)
         setProjects(loadProjects())
       })
       .catch(error => console.error('Failed to load SubFinder data:', error))
@@ -56,7 +58,8 @@ export default function App() {
 
   const role = user?.role || 'hps'
   const admin = canEdit(user)
-  const visibleSubs = useMemo(() => visibleSubsForRole(subs, role), [subs, role])
+  // The server only sends the subcontractors this user is allowed to see.
+  const visibleSubs = subs
 
   const filtered = useMemo(() => {
     const query = filters.search.trim().toLowerCase()
@@ -154,6 +157,17 @@ export default function App() {
 
   if (authLoading || !user) return <div style={{ padding: 40, fontFamily: 'system-ui' }}>Signing in...</div>
   if (loading) return <div style={{ padding: 40, fontFamily: 'system-ui' }}>Loading...</div>
+  if (role === 'none') {
+    return (
+      <div className="app-root">
+        <TopNav active={tab} onChange={setTab} user={user} />
+        <div className="no-access">
+          <h2>No access yet</h2>
+          <p>Your account ({user.email || 'not signed in'}) isn't linked to a company in SubFinder. Contact your administrator to get access.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app-root">
@@ -161,7 +175,9 @@ export default function App() {
 
       {admin && !savingEnabled && (
         <div className="banner banner-warn app-banner">
-          Saving isn't set up on the server yet, so changes you make won't be kept after you leave the page.
+          {savingProblem
+            ? `Changes can't be saved right now: ${savingProblem}`
+            : "Saving isn't set up on the server yet, so changes you make won't be kept after you leave the page."}
         </div>
       )}
 
@@ -180,6 +196,7 @@ export default function App() {
             setSelectedId={setSelectedId}
             onAdd={admin ? () => setShowAdd(true) : null}
             onImport={admin ? () => setShowImport(true) : null}
+            office={user.office}
           />
 
           <div className="map-wrap">

@@ -11,7 +11,8 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { getUser, requireAdmin } from './auth.js'
-import { createStore, ConflictError } from './store.js'
+import { withinOffice } from './offices.js'
+import { openStore, ConflictError, describeStorageError } from './store.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const staticDir = process.env.STATIC_DIR || path.join(root, 'dist')
@@ -20,7 +21,16 @@ const port = Number(process.env.PORT || 80)
 
 const seed = JSON.parse(fs.readFileSync(seedFile, 'utf8'))
 const seedById = new Map(seed.map(sub => [sub.id, sub]))
-const store = createStore()
+// Storage is checked once at startup; until then (or if it fails) the app is
+// read-only and admins are told why.
+let store = null
+let storageProblem = 'the server is still starting up, try again in a moment.'
+openStore().then(result => {
+  store = result.store
+  storageProblem = result.problem
+  const configured = process.env.AZURE_STORAGE_CONNECTION_STRING ? 'AZURE_STORAGE_CONNECTION_STRING is set' : process.env.DATA_DIR ? 'DATA_DIR is set' : 'no AZURE_STORAGE_CONNECTION_STRING or DATA_DIR environment variable'
+  console.log(`Storage: ${store ? store.kind : 'none, read-only'} (${configured})${storageProblem ? ` - problem: ${storageProblem}` : ''}`)
+})
 
 const app = express()
 app.disable('x-powered-by')
@@ -29,7 +39,7 @@ app.use('/api', express.json({ limit: '25mb' }))
 const asyncRoute = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
 
 function requireStore(req, res, next) {
-  if (!store) return res.status(503).json({ error: 'Saving is not set up on this server yet, so changes cannot be saved.' })
+  if (!store) return res.status(503).json({ error: storageProblem ? `Saving isn't working: ${storageProblem}` : 'Saving is not set up on this server yet, so changes cannot be saved.' })
   next()
 }
 
@@ -61,11 +71,31 @@ app.get('/health', (req, res) => res.type('text/plain').send('healthy\n'))
 app.get('/api/me', (req, res) => res.json(getUser(req)))
 
 app.get('/api/subs', asyncRoute(async (req, res) => {
-  const saved = store ? await store.list() : []
+  let saved = []
+  let problem = store ? null : storageProblem
+  if (store) {
+    try {
+      saved = await store.list()
+    } catch (error) {
+      console.error('Loading saved edits failed:', error?.code || error?.statusCode || error?.message)
+      problem = describeStorageError(error)
+    }
+  }
   const savedById = new Map(saved.map(sub => [sub.id, sub]))
   const subs = seed.map(sub => savedById.get(sub.id) || sub)
   for (const sub of saved) if (!seedById.has(sub.id)) subs.push(sub)
-  res.set('Cache-Control', 'no-store').json({ saving: Boolean(store), subs })
+
+  // Each user only receives the subcontractors they're allowed to see.
+  const user = getUser(req)
+  let visible = subs
+  if (user.role === 'office') visible = subs.filter(sub => withinOffice(sub, user.office))
+  else if (user.role === 'none') visible = []
+
+  res.set('Cache-Control', 'no-store').json({
+    saving: user.role === 'admin' && Boolean(store) && !problem,
+    problem: user.role === 'admin' ? problem : null,
+    subs: visible,
+  })
 }))
 
 // Edit a subcontractor. Ratings are kept as stored; they change only through
@@ -133,6 +163,9 @@ app.delete('/api/subs/:id/rating', requireAdmin, requireStore, asyncRoute(async 
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }))
 
+// The full seed list must only come through /api/subs, which filters by user.
+app.get('/subcontractors.json', (req, res) => res.status(404).end())
+
 // Built front end. Hashed assets cache forever; index.html never does.
 app.use('/assets', express.static(path.join(staticDir, 'assets'), { immutable: true, maxAge: '1y' }))
 app.use(express.static(staticDir, { index: false, maxAge: 0 }))
@@ -151,5 +184,5 @@ app.use((error, req, res, next) => {
 })
 
 app.listen(port, () => {
-  console.log(`SubFinder listening on :${port} (storage: ${store?.kind || 'none, read-only'})`)
+  console.log(`SubFinder listening on :${port}`)
 })

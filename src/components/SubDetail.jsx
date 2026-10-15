@@ -7,7 +7,9 @@ import {
   LICENSE_TYPES,
   ATTACHMENT_TYPES,
   SERVICE_TAXONOMY,
+  SERVICE_DELIVERY,
   STATUSES,
+  serviceDelivery,
 } from '../data.js'
 import { CloseIcon, TrashIcon, UploadIcon, DownloadIcon, PhoneIcon, PlusIcon, WarningIcon } from './icons.jsx'
 import { daysUntil, ratingSummary } from '../lib/metrics.js'
@@ -71,7 +73,20 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
 function InfoTab({ sub, patch, canEdit }) {
   const toggleService = service => {
     const current = sub.canonicalServices || []
-    patch({ canonicalServices: current.includes(service) ? current.filter(item => item !== service) : [...current, service] })
+    if (current.includes(service)) {
+      const { [service]: _removed, ...delivery } = sub.serviceDelivery || {}
+      patch({ canonicalServices: current.filter(item => item !== service), serviceDelivery: delivery })
+    } else {
+      patch({ canonicalServices: [...current, service] })
+    }
+  }
+
+  // Clicking the selected option again clears it back to "not set".
+  const setDelivery = (service, value) => {
+    const delivery = { ...(sub.serviceDelivery || {}) }
+    if (delivery[service] === value) delete delivery[service]
+    else delivery[service] = value
+    patch({ serviceDelivery: delivery })
   }
 
   const toggleScale = scale => {
@@ -129,6 +144,33 @@ function InfoTab({ sub, patch, canEdit }) {
           ))}
         </div>
         {sub.servicesRaw && <div className="original-services">Original: {sub.servicesRaw}</div>}
+
+        {(sub.canonicalServices || []).length > 0 && (
+          <div className="delivery-list">
+            <div className="delivery-help">Do they do the work themselves or sub it out?</div>
+            {sub.canonicalServices.map(service => {
+              const current = serviceDelivery(sub, service)
+              return (
+                <div key={service} className="delivery-row">
+                  <span className="delivery-service">{service}</span>
+                  <div className="segmented" role="group" aria-label={`${service}: self-performs or subs out`}>
+                    {SERVICE_DELIVERY.map(option => (
+                      <button
+                        type="button"
+                        key={option.key}
+                        className={`segment segment-${option.key}${current === option.key ? ' active' : ''}`}
+                        aria-pressed={current === option.key}
+                        onClick={() => setDelivery(service, option.key)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </Section>
 
       <Section title="Project Scales">

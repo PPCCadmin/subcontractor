@@ -68,6 +68,7 @@ export function migrate(sub) {
     projectScales: sub.projectScales || [],
     attachments: (sub.attachments || []).filter(file => file.type !== 'COI'),
     visibleToBUs: sub.visibleToBUs ?? null,
+    serviceDelivery: sub.serviceDelivery || {},
     ratings: sub.ratings || (sub.rating ? [{ id: `imported-${sub.id}`, stars: sub.rating, byEmail: '', byName: 'Imported rating', comment: '', date: null }] : []),
     locationAccuracy: sub.locationAccuracy || (sub.lat != null && sub.lng != null ? 'exact' : 'unknown'),
   }
@@ -113,6 +114,18 @@ export const SERVICE_TAXONOMY = [
   'Equipment Rental',
   'Testing',
 ]
+
+// Whether a subcontractor does a service with their own crews or subs it out.
+// Stored per service in sub.serviceDelivery, e.g. { Milling: 'self', Striping: 'subs' };
+// a service with no entry is not known yet.
+export const SERVICE_DELIVERY = [
+  { key: 'self', label: 'Self-performs' },
+  { key: 'subs', label: 'Subs out' },
+]
+
+export function serviceDelivery(sub, service) {
+  return sub.serviceDelivery?.[service] || null
+}
 
 export const BUSINESS_STRUCTURES = ['LLC', 'Corporation', 'S-Corp', 'Partnership', 'Sole Proprietor', 'Other']
 export const CONTACT_ROLES = ['Owner', 'Estimator', 'Accounting', 'Field Operations', 'Project Manager', 'Sales', 'Other']

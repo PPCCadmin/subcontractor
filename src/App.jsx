@@ -6,7 +6,7 @@ import AddSubModal from './components/AddSubModal.jsx'
 import CsvImportModal from './components/CsvImportModal.jsx'
 import TopNav from './components/TopNav.jsx'
 import Dashboard from './components/Dashboard.jsx'
-import { loadSubs, migrate, loadProjects, saveProjects, STATUSES } from './data.js'
+import { loadSubs, migrate, loadProjects, saveProjects, STATUSES, serviceDelivery } from './data.js'
 import * as turf from '@turf/turf'
 import { fetchUser, canEdit } from './lib/auth.js'
 import { saveSub, createSubs, rateSub, unrateSub } from './lib/api.js'
@@ -34,6 +34,7 @@ export default function App() {
     jobQuery: '',
     services: new Set(),
     statuses: new Set(),
+    selfPerformOnly: false,
   })
 
   useEffect(() => {
@@ -71,9 +72,13 @@ export default function App() {
         if (!searchable.includes(query)) return false
       }
 
-      if (filters.services.size > 0) {
+      if (filters.services.size > 0 || filters.selfPerformOnly) {
+        // With no services picked, any service counts.
+        const wanted = filters.services.size ? [...filters.services] : (sub.canonicalServices || [])
         const services = sub.canonicalServices || []
-        if (![...filters.services].some(service => services.includes(service))) return false
+        const matches = wanted.filter(service => services.includes(service))
+        if (!matches.length) return false
+        if (filters.selfPerformOnly && !matches.some(service => serviceDelivery(sub, service) === 'self')) return false
       }
 
       if (filters.statuses.size > 0 && !filters.statuses.has(sub.status)) return false

@@ -1,5 +1,5 @@
 import React from 'react'
-import { SERVICE_TAXONOMY, STATUSES } from '../data.js'
+import { SERVICE_TAXONOMY, STATUSES, serviceDelivery } from '../data.js'
 import { SearchIcon, MapPinIcon, PlusIcon, UploadIcon } from './icons.jsx'
 import * as turf from '@turf/turf'
 import { ratingSummary } from '../lib/metrics.js'
@@ -58,6 +58,7 @@ export default function Sidebar({
       search: '',
       services: new Set(),
       statuses: new Set(),
+      selfPerformOnly: false,
     })
   }
 
@@ -101,7 +102,7 @@ export default function Sidebar({
       .sort((a, b) => a._dist - b._dist)
   }, [filteredSubs, jobLocation])
 
-  const hasFilters = Boolean(filters.search || filters.services.size || filters.statuses.size)
+  const hasFilters = Boolean(filters.search || filters.services.size || filters.statuses.size || filters.selfPerformOnly)
 
   return (
     <aside className="sidebar">
@@ -190,6 +191,15 @@ export default function Sidebar({
             ))}
           </div>
 
+          <label className="self-perform-filter">
+            <input
+              type="checkbox"
+              checked={Boolean(filters.selfPerformOnly)}
+              onChange={event => setFilters({ ...filters, selfPerformOnly: event.target.checked })}
+            />
+            {filters.services.size ? 'Only subs who self-perform these services' : 'Only subs who self-perform'}
+          </label>
+
           <div className="filter-label status-filter-label">Status</div>
           <div className="chips">
             {STATUSES.map(status => (
@@ -237,9 +247,18 @@ export default function Sidebar({
             </div>
             {sub.canonicalServices?.length > 0 && (
               <div className="sub-services">
-                {sub.canonicalServices.map(service => (
-                  <span key={service} className="mini-chip">{service}</span>
-                ))}
+                {sub.canonicalServices.map(service => {
+                  const delivery = serviceDelivery(sub, service)
+                  return (
+                    <span
+                      key={service}
+                      className={`mini-chip${delivery ? ` delivery-${delivery}` : ''}`}
+                      title={delivery === 'self' ? 'Self-performs' : delivery === 'subs' ? 'Subs out' : 'Not known if they self-perform'}
+                    >
+                      {service}{delivery === 'subs' ? ' · subs out' : delivery === 'self' ? ' · self' : ''}
+                    </span>
+                  )
+                })}
               </div>
             )}
           </div>

@@ -36,7 +36,7 @@ Admins manage access in the **Admin** tab:
 - **Business units:** give each person one or more business units; they only see subcontractors within the radius (default 200 miles, set in the Admin tab) of those offices. Or tick **All business units**.
 - **Admin:** can add, import, edit and rate subcontractors, sees everything, and can use the Admin tab. Everyone else is read-only.
 
-Built-in admins (`BUILT_IN_ADMINS` in `server/auth.js`, plus the optional `ADMIN_EMAILS` environment variable) always have full access and can't be removed in the Admin tab, so nobody can be locked out. Business unit offices are listed in `server/businessUnits.js`. The access list is stored in storage as `settings/access.json`.
+Admins are edited in the Admin tab like everyone else. To prevent lockouts, the list must keep at least one admin and admins can't remove their own admin access. As a break-glass option, emails in the `ADMIN_EMAILS` environment variable on the container app are always admins. Business unit offices are listed in `server/businessUnits.js`. The access list is stored in storage as `settings/access.json`.
 
 The server enforces all of this and relies on Azure Container Apps authentication (Easy Auth) requiring sign-in, so it can trust the signed-in user header.
 

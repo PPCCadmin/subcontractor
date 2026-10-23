@@ -10,7 +10,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { createAuth, BUILT_IN_ADMINS } from './auth.js'
+import { createAuth, EMERGENCY_ADMINS } from './auth.js'
 import { createAccess, AccessValidationError } from './access.js'
 import { BUSINESS_UNITS, withinAreas } from './businessUnits.js'
 import { openStore, ConflictError, describeStorageError } from './store.js'
@@ -173,13 +173,13 @@ app.get('/api/admin/access', requireAdmin, asyncRoute(async (req, res) => {
     ...doc.value,
     version: doc.etag,
     canSave: Boolean(store) && !doc.unavailable,
-    builtInAdmins: BUILT_IN_ADMINS,
+    emergencyAdmins: EMERGENCY_ADMINS,
     businessUnits: BUSINESS_UNITS.map(({ key, name, address }) => ({ key, name, address })),
   })
 }))
 
 app.put('/api/admin/access', requireAdmin, requireStore, asyncRoute(async (req, res) => {
-  const doc = await access.save(req.body || {}, req.body?.version, req.user.email)
+  const doc = await access.save(req.body || {}, req.body?.version, { email: req.user.email, emergency: req.user.builtInAdmin })
   res.json({ ...doc.value, version: doc.etag })
 }))
 

@@ -256,7 +256,7 @@ export default function App() {
         </div>
       )}
 
-      {tab === 'admin' && admin && <AdminView />}
+      {tab === 'admin' && admin && <AdminView currentEmail={user.email} />}
 
       {tab === 'dashboard' && (
         <Dashboard

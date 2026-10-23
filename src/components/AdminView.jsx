@@ -6,7 +6,7 @@ const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 // Admin tab: choose who can use SubFinder, which business units each person
 // sees, and who is an admin. Changes apply when the person next loads the site.
-export default function AdminView() {
+export default function AdminView({ currentEmail }) {
   const [loaded, setLoaded] = useState(null)
   const [users, setUsers] = useState([])
   const [radius, setRadius] = useState(200)
@@ -39,7 +39,7 @@ export default function AdminView() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
-  const builtIn = new Set(loaded?.builtInAdmins || [])
+  const emergency = new Set(loaded?.emergencyAdmins || [])
 
   const update = (email, changes) => setUsers(previous => previous.map(user => user.email === email ? { ...user, ...changes } : user))
 
@@ -53,7 +53,7 @@ export default function AdminView() {
     const email = newEmail.trim().toLowerCase()
     if (!EMAIL_PATTERN.test(email)) return setMessage({ type: 'error', text: 'Enter a full email address, e.g. jane.doe@heartlandpavingpartners.com' })
     if (users.some(user => user.email === email)) return setMessage({ type: 'error', text: `${email} is already on the list.` })
-    if (builtIn.has(email)) return setMessage({ type: 'error', text: `${email} is a built-in admin and already has full access.` })
+    if (emergency.has(email)) return setMessage({ type: 'error', text: `${email} is an emergency admin (set on the server) and already has full access.` })
     setUsers(previous => [{ email, name: newName.trim(), admin: false, allBusinessUnits: false, businessUnits: [] }, ...previous])
     setNewEmail('')
     setNewName('')
@@ -135,27 +135,32 @@ export default function AdminView() {
         </div>
 
         <div className="admin-users">
-          {[...builtIn].map(email => (
+          {[...emergency].map(email => (
             <div key={email} className="admin-user locked">
               <div className="admin-user-id">
                 <div className="admin-email">{email}</div>
-                <div className="admin-note">Built-in admin · always sees everything and can edit</div>
+                <div className="admin-note">Emergency admin · set by the ADMIN_EMAILS server setting, can't be changed here</div>
               </div>
             </div>
           ))}
 
           {shown.map(user => {
             const noAccess = !user.admin && !user.allBusinessUnits && !(user.businessUnits || []).length
+            // Admins can't demote or remove themselves (another admin has to), so
+            // nobody locks themselves out by accident.
+            const isMe = user.email === currentEmail && !emergency.has(currentEmail)
             return (
               <div key={user.email} className={`admin-user${noAccess ? ' warn' : ''}`}>
                 <div className="admin-user-id">
-                  <div className="admin-email">{user.email}</div>
+                  <div className="admin-email">{user.email}{isMe && <span className="mini-chip">You</span>}</div>
                   <input className="admin-name" type="text" placeholder="Name" value={user.name || ''} onChange={event => update(user.email, { name: event.target.value })} />
                 </div>
 
                 <div className="admin-user-access">
                   <div className="admin-toggles">
-                    <label><input type="checkbox" checked={user.admin} onChange={event => update(user.email, { admin: event.target.checked })} /> Admin (can edit, sees everything)</label>
+                    <label title={isMe ? "You can't remove your own admin access" : undefined}>
+                      <input type="checkbox" checked={user.admin} disabled={isMe} onChange={event => update(user.email, { admin: event.target.checked })} /> Admin (can edit, sees everything)
+                    </label>
                     {!user.admin && (
                       <label><input type="checkbox" checked={user.allBusinessUnits} onChange={event => update(user.email, { allBusinessUnits: event.target.checked })} /> All business units</label>
                     )}
@@ -175,7 +180,9 @@ export default function AdminView() {
                   {noAccess && <div className="admin-note admin-warn">No business units picked, so this person can't see anything yet.</div>}
                 </div>
 
-                <button className="icon-only-btn" title={`Remove ${user.email}`} onClick={() => setUsers(previous => previous.filter(item => item.email !== user.email))}><TrashIcon /></button>
+                {!isMe && (
+                  <button className="icon-only-btn" title={`Remove ${user.email}`} onClick={() => setUsers(previous => previous.filter(item => item.email !== user.email))}><TrashIcon /></button>
+                )}
               </div>
             )
           })}

@@ -10,13 +10,22 @@
 //     updatedAt, updatedBy
 //   }
 //
-// Anyone not on the list (and not a built-in admin, see auth.js) has no access.
+// Anyone not on the list (and not an emergency admin, see auth.js) has no access.
 // -----------------------------------------------------------------------------
 
 import { ConflictError } from './store.js'
 import { BUSINESS_UNITS, DEFAULT_RADIUS_MILES, businessUnit } from './businessUnits.js'
 
 const DOC = 'access'
+const SCHEMA = 2
+
+// The first admins. They start on the list as regular, editable admins.
+const STARTING_ADMINS = [
+  'luke.norvid@heartlandpavingpartners.com',
+  'lisa.callahan@heartlandpavingsolutions.com',
+  'todd.koehler@heartlandpavingpartners.com',
+  'ron.repking@heartlandpavingpartners.com',
+]
 const CACHE_MS = 30 * 1000
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
@@ -24,22 +33,33 @@ export class AccessValidationError extends Error {}
 
 const emptyAccess = () => ({ radiusMiles: DEFAULT_RADIUS_MILES, users: [] })
 
+// Lists saved before admins became editable didn't include the original
+// admins (they were hard-coded), so add them back as editable admins.
+function withStartingAdmins(value) {
+  if (value.schema === SCHEMA) return value
+  const listed = new Set(value.users.map(user => user.email))
+  const added = STARTING_ADMINS.filter(email => !listed.has(email))
+    .map(email => ({ email, name: '', admin: true, allBusinessUnits: true, businessUnits: [] }))
+  return { ...value, users: [...added, ...value.users] }
+}
+
 export function createAccess(getStore) {
   let cache = null
 
-  // Fails closed: if the list can't be read, nobody but built-in admins gets in.
+  // Fails closed: if the list can't be read, only the starting and emergency
+  // admins get in.
   async function load({ fresh = false } = {}) {
     if (!fresh && cache && Date.now() - cache.at < CACHE_MS) return cache.doc
     const store = getStore()
-    if (!store) return { value: emptyAccess(), etag: null, unavailable: true }
+    if (!store) return { value: withStartingAdmins(emptyAccess()), etag: null, unavailable: true }
     try {
       const doc = (await store.getDoc(DOC)) || { value: emptyAccess(), etag: null }
-      doc.value = { ...emptyAccess(), ...doc.value }
+      doc.value = withStartingAdmins({ ...emptyAccess(), ...doc.value })
       cache = { at: Date.now(), doc }
       return doc
     } catch (error) {
       console.error('Loading access list failed:', error?.code || error?.statusCode || error?.message)
-      return { value: emptyAccess(), etag: null, unavailable: true }
+      return { value: withStartingAdmins(emptyAccess()), etag: null, unavailable: true }
     }
   }
 
@@ -51,13 +71,20 @@ export function createAccess(getStore) {
 
   // Replaces the whole list. `version` is the etag the admin loaded, so two
   // admins editing at once can't silently overwrite each other.
+  // editor: { email, emergency } - emergency admins may change anything.
   async function save({ users, radiusMiles }, version, editor) {
     const store = getStore()
     const value = {
+      schema: SCHEMA,
       radiusMiles: validRadius(radiusMiles),
       users: validUsers(users),
       updatedAt: new Date().toISOString(),
-      updatedBy: editor,
+      updatedBy: editor.email,
+    }
+    // Guard against locking everyone out.
+    if (!value.users.some(user => user.admin)) throw new AccessValidationError('Keep at least one admin on the list.')
+    if (!editor.emergency && !value.users.some(user => user.email === editor.email && user.admin)) {
+      throw new AccessValidationError("You can't remove your own admin access. Ask another admin to do it.")
     }
     try {
       await store.putDoc(DOC, value, version || null)

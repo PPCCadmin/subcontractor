@@ -11,19 +11,15 @@
 
 import { businessUnit } from './businessUnits.js'
 
-// ---- CONFIG: built-in admins ------------------------------------------------
+// ---- CONFIG: emergency admins -----------------------------------------------
 
-// Built-in admins always have full access and can't be removed in the Admin
-// tab, so nobody can lock everyone out. Everyone else is managed in the Admin
-// tab. Extra built-in admins can be added through the ADMIN_EMAILS environment
-// variable (comma-separated) on the container app. Keep lower-case.
-export const BUILT_IN_ADMINS = [
-  'luke.norvid@heartlandpavingpartners.com',
-  'lisa.callahan@heartlandpavingsolutions.com',
-  'todd.koehler@heartlandpavingpartners.com',
-  'ron.repking@heartlandpavingpartners.com',
-  ...String(process.env.ADMIN_EMAILS || '').split(','),
-].map(email => email.trim().toLowerCase()).filter(Boolean)
+// Admins are managed in the Admin tab (server/access.js). As a break-glass
+// option, emails in the ADMIN_EMAILS environment variable (comma-separated) on
+// the container app are always admins and can't be changed in the Admin tab.
+export const EMERGENCY_ADMINS = String(process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map(email => email.trim().toLowerCase())
+  .filter(Boolean)
 
 // Optional: Entra ID app roles that also grant edit access. Create an app role
 // with this value on the app registration, then assign users under
@@ -77,7 +73,7 @@ export function createAuth(access) {
     if (!email) return { authenticated: false, email: '', name: 'Guest', role: 'none', allBusinessUnits: false, areas: [] }
     const base = { authenticated: true, email, name: name || email }
 
-    const builtIn = BUILT_IN_ADMINS.includes(email) || roles.some(role => ADMIN_APP_ROLES.includes(role))
+    const builtIn = EMERGENCY_ADMINS.includes(email) || roles.some(role => ADMIN_APP_ROLES.includes(role))
     const { entry, radiusMiles } = await access.lookup(email)
     if (builtIn || entry?.admin) return { ...base, role: 'admin', builtInAdmin: builtIn, allBusinessUnits: true, areas: [] }
     if (!entry) return { ...base, role: 'none', reason: 'not-listed', allBusinessUnits: false, areas: [] }

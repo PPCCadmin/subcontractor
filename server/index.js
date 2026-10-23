@@ -1,8 +1,8 @@
 // server/index.js
 // -----------------------------------------------------------------------------
 // SubFinder server: serves the built React app and a small JSON API that saves
-// subcontractor edits and ratings. Everyone signed in can read; only admins
-// (see server/auth.js) can write.
+// subcontractor edits and ratings. Users on the access list (Admin tab) can
+// read the subcontractors near their business units; only admins can write.
 // -----------------------------------------------------------------------------
 
 import express from 'express'
@@ -10,8 +10,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { getUser, requireAdmin } from './auth.js'
-import { withinOffice } from './offices.js'
+import { createAuth, BUILT_IN_ADMINS } from './auth.js'
+import { createAccess, AccessValidationError } from './access.js'
+import { BUSINESS_UNITS, withinAreas } from './businessUnits.js'
 import { openStore, ConflictError, describeStorageError } from './store.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -31,6 +32,9 @@ openStore().then(result => {
   const configured = process.env.AZURE_STORAGE_CONNECTION_STRING ? 'AZURE_STORAGE_CONNECTION_STRING is set' : process.env.DATA_DIR ? 'DATA_DIR is set' : 'no AZURE_STORAGE_CONNECTION_STRING or DATA_DIR environment variable'
   console.log(`Storage: ${store ? store.kind : 'none, read-only'} (${configured})${storageProblem ? ` - problem: ${storageProblem}` : ''}`)
 })
+
+const access = createAccess(() => store)
+const { getUser, requireAdmin } = createAuth(access)
 
 const app = express()
 app.disable('x-powered-by')
@@ -68,7 +72,7 @@ async function updateSub(id, change) {
 
 app.get('/health', (req, res) => res.type('text/plain').send('healthy\n'))
 
-app.get('/api/me', (req, res) => res.json(getUser(req)))
+app.get('/api/me', asyncRoute(async (req, res) => res.set('Cache-Control', 'no-store').json(await getUser(req))))
 
 app.get('/api/subs', asyncRoute(async (req, res) => {
   let saved = []
@@ -86,10 +90,10 @@ app.get('/api/subs', asyncRoute(async (req, res) => {
   for (const sub of saved) if (!seedById.has(sub.id)) subs.push(sub)
 
   // Each user only receives the subcontractors they're allowed to see.
-  const user = getUser(req)
+  const user = await getUser(req)
   let visible = subs
-  if (user.role === 'office') visible = subs.filter(sub => withinOffice(sub, user.office))
-  else if (user.role === 'none') visible = []
+  if (user.role === 'none') visible = []
+  else if (!user.allBusinessUnits) visible = subs.filter(sub => withinAreas(sub, user.areas))
 
   res.set('Cache-Control', 'no-store').json({
     saving: user.role === 'admin' && Boolean(store) && !problem,
@@ -161,6 +165,24 @@ app.delete('/api/subs/:id/rating', requireAdmin, requireStore, asyncRoute(async 
   res.json(saved)
 }))
 
+// ---- Admin tab: who can use SubFinder and which business units they see ----
+
+app.get('/api/admin/access', requireAdmin, asyncRoute(async (req, res) => {
+  const doc = await access.load({ fresh: true })
+  res.set('Cache-Control', 'no-store').json({
+    ...doc.value,
+    version: doc.etag,
+    canSave: Boolean(store) && !doc.unavailable,
+    builtInAdmins: BUILT_IN_ADMINS,
+    businessUnits: BUSINESS_UNITS.map(({ key, name, address }) => ({ key, name, address })),
+  })
+}))
+
+app.put('/api/admin/access', requireAdmin, requireStore, asyncRoute(async (req, res) => {
+  const doc = await access.save(req.body || {}, req.body?.version, req.user.email)
+  res.json({ ...doc.value, version: doc.etag })
+}))
+
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }))
 
 // The full seed list must only come through /api/subs, which filters by user.
@@ -176,10 +198,11 @@ app.get('*', (req, res, next) => {
 })
 
 app.use((error, req, res, next) => {
-  console.error(error)
   if (res.headersSent) return next(error)
   if (error instanceof ConflictError) return res.status(409).json({ error: error.message })
+  if (error instanceof AccessValidationError) return res.status(400).json({ error: error.message })
   if (error.type === 'entity.too.large') return res.status(413).json({ error: 'That change is too large to save (attachments over 25 MB).' })
+  console.error(error)
   res.status(500).json({ error: 'Something went wrong saving your change.' })
 })
 

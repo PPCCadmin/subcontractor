@@ -30,12 +30,15 @@ npm run build && npm start
 1,287 subcontractors preloaded in public/subcontractors.json.
 Edits never change that file: each edited or added subcontractor is saved as its own JSON document in storage and merged over the seed data when the app loads.
 
-## Who can edit
-Only admins can add, import, edit or rate subcontractors; everyone else is read-only. The server enforces this on every change.
-- Admin emails: `ADMIN_EMAILS` in `server/auth.js`, or the `ADMIN_EMAILS` environment variable (comma-separated) on the container app.
-- Or assign users the `SubcontractorEditor` app role in Entra ID.
+## Who can use it (Admin tab)
+Admins manage access in the **Admin** tab:
+- **Add people** by their Microsoft email. Anyone not listed can't see anything.
+- **Business units:** give each person one or more business units; they only see subcontractors within the radius (default 200 miles, set in the Admin tab) of those offices. Or tick **All business units**.
+- **Admin:** can add, import, edit and rate subcontractors, sees everything, and can use the Admin tab. Everyone else is read-only.
 
-This relies on Azure Container Apps authentication (Easy Auth) being enabled and requiring sign-in, so the server can trust the signed-in user header.
+Built-in admins (`BUILT_IN_ADMINS` in `server/auth.js`, plus the optional `ADMIN_EMAILS` environment variable) always have full access and can't be removed in the Admin tab, so nobody can be locked out. Business unit offices are listed in `server/businessUnits.js`. The access list is stored in storage as `settings/access.json`.
+
+The server enforces all of this and relies on Azure Container Apps authentication (Easy Auth) requiring sign-in, so it can trust the signed-in user header.
 
 ## Saving edits (server storage)
 | Setting | Effect |

@@ -4,11 +4,11 @@
 // enforces it on every change; the browser only uses the role to show or hide
 // editing controls.
 //
-// Roles (the server also decides which subcontractors each user receives):
+// Roles (set in the Admin tab; the server also decides which subcontractors
+// each user receives):
 //   'admin'  -> sees every subcontractor, can add / import / edit / rate
-//   'hps'    -> Heartland corporate, sees every subcontractor, read-only
-//   'office' -> company user, sees subcontractors near their office, read-only
-//   'none'   -> email domain not linked to any company, sees nothing
+//   'viewer' -> read-only; all business units or only the ones assigned
+//   'none'   -> not given access yet, sees nothing
 // -----------------------------------------------------------------------------
 
 import { getMe } from './api.js'
@@ -21,8 +21,8 @@ export const READ_ONLY_USER = {
   name: 'HPP User',
   email: '',
   role: 'none',
-  office: null,
-  roles: [],
+  allBusinessUnits: false,
+  areas: [],
 }
 
 // Any failure falls back to a read-only user, never to an editor.

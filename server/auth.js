@@ -1,6 +1,6 @@
 // server/auth.js
 // -----------------------------------------------------------------------------
-// Who is signed in, and who may create / edit subcontractors.
+// Who is signed in, what they may see, and who may make changes.
 //
 // Azure Container Apps authentication (Easy Auth) signs the user in before any
 // request reaches this server and passes their identity in the
@@ -9,14 +9,15 @@
 // buttons.
 // -----------------------------------------------------------------------------
 
-import { officeForEmail, isCorporateEmail } from './offices.js'
+import { businessUnit } from './businessUnits.js'
 
-// ---- CONFIG: who can create and edit subcontractors -------------------------
+// ---- CONFIG: built-in admins ------------------------------------------------
 
-// Emails allowed to add / import / edit / rate subcontractors. Keep lower-case.
-// Extra emails can also be added without a code change through the ADMIN_EMAILS
-// environment variable (comma-separated) on the container app.
-const ADMIN_EMAILS = [
+// Built-in admins always have full access and can't be removed in the Admin
+// tab, so nobody can lock everyone out. Everyone else is managed in the Admin
+// tab. Extra built-in admins can be added through the ADMIN_EMAILS environment
+// variable (comma-separated) on the container app. Keep lower-case.
+export const BUILT_IN_ADMINS = [
   'luke.norvid@heartlandpavingpartners.com',
   'lisa.callahan@heartlandpavingsolutions.com',
   'todd.koehler@heartlandpavingpartners.com',
@@ -37,7 +38,7 @@ const ROLE_CLAIMS = ['roles', 'http://schemas.microsoft.com/ws/2008/06/identity/
 
 const isProduction = process.env.NODE_ENV === 'production'
 
-export function getUser(req) {
+function identity(req) {
   let email = ''
   let name = ''
   let roles = []
@@ -63,26 +64,40 @@ export function getUser(req) {
     name = `${email} (local)`
   }
 
-  email = email.trim().toLowerCase()
-  if (!email) return { authenticated: false, email: '', name: 'Guest', role: 'none', office: null, roles: [] }
-
-  // Roles:
-  //   admin  -> sees every subcontractor, can add / edit / rate
-  //   hps    -> Heartland corporate, sees every subcontractor, read-only
-  //   office -> company user, sees subcontractors near their office, read-only
-  //   none   -> unrecognised email domain, sees nothing
-  const admin = ADMIN_EMAILS.includes(email) || roles.some(role => ADMIN_APP_ROLES.includes(role))
-  const office = officeForEmail(email)
-  let role = 'none'
-  if (admin) role = 'admin'
-  else if (office) role = 'office'
-  else if (isCorporateEmail(email)) role = 'hps'
-  return { authenticated: true, email, name: name || email, role, office: role === 'office' ? office : null, roles }
+  return { email: email.trim().toLowerCase(), name, roles }
 }
 
-export function requireAdmin(req, res, next) {
-  const user = getUser(req)
-  if (user.role !== 'admin') return res.status(403).json({ error: 'Only admins can make changes.' })
-  req.user = user
-  next()
+// Roles:
+//   admin  -> sees every subcontractor, can add / edit / rate, runs the Admin tab
+//   viewer -> read-only; sees all business units or only the ones assigned
+//   none   -> not on the access list (or no business units yet), sees nothing
+export function createAuth(access) {
+  async function getUser(req) {
+    const { email, name, roles } = identity(req)
+    if (!email) return { authenticated: false, email: '', name: 'Guest', role: 'none', allBusinessUnits: false, areas: [] }
+    const base = { authenticated: true, email, name: name || email }
+
+    const builtIn = BUILT_IN_ADMINS.includes(email) || roles.some(role => ADMIN_APP_ROLES.includes(role))
+    const { entry, radiusMiles } = await access.lookup(email)
+    if (builtIn || entry?.admin) return { ...base, role: 'admin', builtInAdmin: builtIn, allBusinessUnits: true, areas: [] }
+    if (!entry) return { ...base, role: 'none', reason: 'not-listed', allBusinessUnits: false, areas: [] }
+    if (entry.allBusinessUnits) return { ...base, role: 'viewer', allBusinessUnits: true, areas: [] }
+
+    const areas = entry.businessUnits.map(businessUnit).filter(Boolean).map(unit => ({ ...unit, radiusMiles }))
+    if (!areas.length) return { ...base, role: 'none', reason: 'no-business-units', allBusinessUnits: false, areas: [] }
+    return { ...base, role: 'viewer', allBusinessUnits: false, areas }
+  }
+
+  async function requireAdmin(req, res, next) {
+    try {
+      const user = await getUser(req)
+      if (user.role !== 'admin') return res.status(403).json({ error: 'Only admins can make changes.' })
+      req.user = user
+      next()
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  return { getUser, requireAdmin }
 }

@@ -4,18 +4,18 @@ import { LOGOUT_URL } from '../lib/auth.js'
 const ALL_TABS = [
   { key: 'map', label: 'Map' },
   { key: 'dashboard', label: 'Dashboard' },
+  { key: 'admin', label: 'Admin', roles: ['admin'] },
 ]
 
 function roleLabel(user) {
   if (!user) return ''
   if (user.role === 'admin') return 'Admin'
-  if (user.role === 'office') return user.office?.name || 'Company'
-  if (user.role === 'hps') return 'HPS'
+  if (user.role === 'viewer') return user.allBusinessUnits ? 'All business units' : (user.areas || []).map(area => area.name).join(', ')
   return 'No access'
 }
 
 export default function TopNav({ active, onChange, user }) {
-  const role = user?.role || 'hps'
+  const role = user?.role || 'none'
   const tabs = ALL_TABS.filter(tab => !tab.roles || tab.roles.includes(role))
 
   return (

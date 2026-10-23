@@ -6,6 +6,7 @@ import AddSubModal from './components/AddSubModal.jsx'
 import CsvImportModal from './components/CsvImportModal.jsx'
 import TopNav from './components/TopNav.jsx'
 import Dashboard from './components/Dashboard.jsx'
+import AdminView from './components/AdminView.jsx'
 import { loadSubs, migrate, loadProjects, saveProjects, STATUSES, serviceDelivery } from './data.js'
 import * as turf from '@turf/turf'
 import { fetchUser, canEdit } from './lib/auth.js'
@@ -57,7 +58,7 @@ export default function App() {
 
   useEffect(() => { saveProjects(projects) }, [projects])
 
-  const role = user?.role || 'hps'
+  const role = user?.role || 'none'
   const admin = canEdit(user)
   // The server only sends the subcontractors this user is allowed to see.
   const visibleSubs = subs
@@ -168,7 +169,12 @@ export default function App() {
         <TopNav active={tab} onChange={setTab} user={user} />
         <div className="no-access">
           <h2>No access yet</h2>
-          <p>Your account ({user.email || 'not signed in'}) isn't linked to a company in SubFinder. Contact your administrator to get access.</p>
+          <p>
+            {user.reason === 'no-business-units'
+              ? `Your account (${user.email}) hasn't been given any business units yet.`
+              : `Your account (${user.email || 'not signed in'}) hasn't been given access to SubFinder.`}
+            {' '}Ask a SubFinder admin to set up your access.
+          </p>
         </div>
       </div>
     )
@@ -201,7 +207,7 @@ export default function App() {
             setSelectedId={setSelectedId}
             onAdd={admin ? () => setShowAdd(true) : null}
             onImport={admin ? () => setShowImport(true) : null}
-            office={user.office}
+            areas={user.allBusinessUnits ? null : user.areas}
           />
 
           <div className="map-wrap">
@@ -249,6 +255,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {tab === 'admin' && admin && <AdminView />}
 
       {tab === 'dashboard' && (
         <Dashboard

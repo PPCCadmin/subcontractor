@@ -29,3 +29,7 @@ export const saveSub = (sub, options) => api(`/subs/${encodeURIComponent(sub.id)
 export const createSubs = subs => api('/subs', { method: 'POST', body: { subs } }).then(data => data.subs)
 export const rateSub = (id, stars, comment) => api(`/subs/${encodeURIComponent(id)}/rating`, { method: 'PUT', body: { stars, comment } })
 export const unrateSub = id => api(`/subs/${encodeURIComponent(id)}/rating`, { method: 'DELETE' })
+
+// Admin tab: the access list (who can use SubFinder and which business units they see)
+export const getAccess = () => api('/admin/access')
+export const saveAccess = access => api('/admin/access', { method: 'PUT', body: access })

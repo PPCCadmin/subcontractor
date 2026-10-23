@@ -38,7 +38,7 @@ export default function Sidebar({
   setSelectedId,
   onAdd,
   onImport,
-  office,
+  areas,
 }) {
   const toggleService = service => {
     const next = new Set(filters.services)
@@ -111,8 +111,8 @@ export default function Sidebar({
           <div>
             <div className="sidebar-title-main">Subcontractors</div>
             <div className="sidebar-title-sub">
-              {office
-                ? `${subs.length.toLocaleString()} within ${office.radiusMiles} mi of ${office.name}`
+              {areas?.length
+                ? `${subs.length.toLocaleString()} within ${areas[0].radiusMiles} mi of ${areas.map(area => area.name).join(', ')}`
                 : `${subs.length.toLocaleString()} on record`}
             </div>
           </div>

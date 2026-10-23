@@ -17,6 +17,7 @@ import { BlobServiceClient } from '@azure/storage-blob'
 export class ConflictError extends Error {}
 
 const blobName = id => `subs/${encodeURIComponent(id)}.json`
+const settingsName = name => `settings/${name}.json`
 
 async function mapLimit(items, limit, fn) {
   const results = []
@@ -64,23 +65,38 @@ function blobStore(connectionString, containerName) {
     // etag: undefined = overwrite, null = must not exist yet, string = must match
     async put(id, sub, etag) {
       await init()
-      const conditions = etag === null ? { ifNoneMatch: '*' } : etag ? { ifMatch: etag } : undefined
-      const body = JSON.stringify(sub)
-      try {
-        await container.getBlockBlobClient(blobName(id)).upload(body, Buffer.byteLength(body), {
-          blobHTTPHeaders: { blobContentType: 'application/json' },
-          conditions,
-        })
-      } catch (error) {
-        if (error.statusCode === 412 || error.statusCode === 409) throw new ConflictError('Changed by someone else')
-        throw error
-      }
+      await write(blobName(id), sub, etag)
     },
+    // Settings documents (e.g. the access list), stored apart from subcontractors.
+    async getDoc(name) {
+      await init()
+      const doc = await read(settingsName(name))
+      return doc && { value: doc.sub, etag: doc.etag }
+    },
+    async putDoc(name, value, etag) {
+      await init()
+      await write(settingsName(name), value, etag)
+    },
+  }
+
+  async function write(name, value, etag) {
+    const conditions = etag === null ? { ifNoneMatch: '*' } : etag ? { ifMatch: etag } : undefined
+    const body = JSON.stringify(value)
+    try {
+      await container.getBlockBlobClient(name).upload(body, Buffer.byteLength(body), {
+        blobHTTPHeaders: { blobContentType: 'application/json' },
+        conditions,
+      })
+    } catch (error) {
+      if (error.statusCode === 412 || error.statusCode === 409) throw new ConflictError('Changed by someone else')
+      throw error
+    }
   }
 }
 
 function fileStore(dir) {
   const file = id => path.join(dir, `${encodeURIComponent(id)}.json`)
+  const settingsFile = name => path.join(dir, 'settings', `${name}.json`)
   const read = async target => {
     try {
       const text = await fs.readFile(target, 'utf8')
@@ -103,13 +119,24 @@ function fileStore(dir) {
       return read(file(id))
     },
     async put(id, sub, etag) {
-      await fs.mkdir(dir, { recursive: true })
-      if (etag !== undefined) {
-        const current = await read(file(id))
-        if ((etag === null && current) || (etag && current?.etag !== etag)) throw new ConflictError('Changed by someone else')
-      }
-      await fs.writeFile(file(id), JSON.stringify(sub))
+      await write(file(id), sub, etag)
     },
+    async getDoc(name) {
+      const doc = await read(settingsFile(name))
+      return doc && { value: doc.sub, etag: doc.etag }
+    },
+    async putDoc(name, value, etag) {
+      await write(settingsFile(name), value, etag)
+    },
+  }
+
+  async function write(target, value, etag) {
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    if (etag !== undefined) {
+      const current = await read(target)
+      if ((etag === null && current) || (etag && current?.etag !== etag)) throw new ConflictError('Changed by someone else')
+    }
+    await fs.writeFile(target, JSON.stringify(value))
   }
 }
 

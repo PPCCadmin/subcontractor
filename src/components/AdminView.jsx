@@ -161,6 +161,9 @@ export default function AdminView() {
                     )}
                   </div>
                   {!user.admin && !user.allBusinessUnits && (
+                    <div className="admin-note admin-units-label">Business units they can see (pick one or more):</div>
+                  )}
+                  {!user.admin && !user.allBusinessUnits && (
                     <div className="chips">
                       {loaded.businessUnits.map(unit => (
                         <button type="button" key={unit.key} className={`chip${(user.businessUnits || []).includes(unit.key) ? ' active' : ''}`} onClick={() => toggleUnit(user, unit.key)}>

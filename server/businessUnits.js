@@ -14,6 +14,8 @@ export const BUSINESS_UNITS = [
   { key: 'macadam', name: 'Macadam', address: '26 South Bacton Hill Road, Malvern, PA 19355', lat: 40.0590, lng: -75.5470 },
   { key: 'professional', name: 'Professional Paving & Concrete', address: '1N282 Park Boulevard, Glen Ellyn, IL 60137', lat: 41.8830, lng: -88.0620 },
   { key: 'sk', name: 'S&K Asphalt and Concrete', address: '2245 Manchester Road, Akron, OH 44314', lat: 41.0377, lng: -81.5459 },
+  { key: 'gsps', name: 'GSPS', address: '300 Commerce Dr Ste 1, Tinton Falls, NJ 07753', lat: 40.2352, lng: -74.1074 },
+  { key: 'aci', name: 'ACI', address: '10285 89th Ave N, Osseo, MN 55369', lat: 45.1161, lng: -93.4120 },
 ]
 
 const byKey = new Map(BUSINESS_UNITS.map(unit => [unit.key, unit]))

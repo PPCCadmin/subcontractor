@@ -776,3 +776,4 @@ body {
 .admin-message.success { color: #1a5c38; font-weight: 600; }
 .admin-updated { margin-top: 4px; }
 @media (max-width: 600px) { .admin-page { padding: 14px; } }
+.admin-units-label { margin-bottom: 5px; }

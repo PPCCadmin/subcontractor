@@ -5,7 +5,8 @@
 // document ("access") in storage:
 //
 //   {
-//     radiusMiles: 200,
+//     radiusMiles: 200,                    // default for units without their own
+//     unitRadius: { poblocki: 150, ... },  // miles per business unit
 //     users: [{ email, name, admin, allBusinessUnits, businessUnits: ['poblocki'] }],
 //     updatedAt, updatedBy
 //   }
@@ -31,7 +32,7 @@ const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 export class AccessValidationError extends Error {}
 
-const emptyAccess = () => ({ radiusMiles: DEFAULT_RADIUS_MILES, users: [] })
+const emptyAccess = () => ({ radiusMiles: DEFAULT_RADIUS_MILES, unitRadius: {}, users: [] })
 
 // Lists saved before admins became editable didn't include the original
 // admins (they were hard-coded), so add them back as editable admins.
@@ -66,17 +67,19 @@ export function createAccess(getStore) {
   async function lookup(email) {
     const { value } = await load()
     const entry = value.users.find(user => user.email === email) || null
-    return { entry, radiusMiles: value.radiusMiles }
+    const radiusFor = key => value.unitRadius?.[key] || value.radiusMiles
+    return { entry, radiusFor }
   }
 
   // Replaces the whole list. `version` is the etag the admin loaded, so two
   // admins editing at once can't silently overwrite each other.
   // editor: { email, emergency } - emergency admins may change anything.
-  async function save({ users, radiusMiles }, version, editor) {
+  async function save({ users, radiusMiles, unitRadius }, version, editor) {
     const store = getStore()
     const value = {
       schema: SCHEMA,
       radiusMiles: validRadius(radiusMiles),
+      unitRadius: validUnitRadius(unitRadius),
       users: validUsers(users),
       updatedAt: new Date().toISOString(),
       updatedBy: editor.email,
@@ -99,10 +102,16 @@ export function createAccess(getStore) {
   return { load, lookup, save }
 }
 
-function validRadius(value) {
+function validRadius(value, label = 'Radius') {
   const miles = Number(value)
-  if (!Number.isFinite(miles) || miles < 1 || miles > 3000) throw new AccessValidationError('Radius must be between 1 and 3000 miles.')
+  if (!Number.isFinite(miles) || miles < 1 || miles > 3000) throw new AccessValidationError(`${label} radius must be between 1 and 3000 miles.`)
   return Math.round(miles)
+}
+
+function validUnitRadius(unitRadius) {
+  return Object.fromEntries(Object.entries(unitRadius || {})
+    .filter(([key]) => businessUnit(key))
+    .map(([key, miles]) => [key, validRadius(miles, businessUnit(key).name)]))
 }
 
 function validUsers(users) {

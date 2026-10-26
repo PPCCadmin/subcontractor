@@ -33,7 +33,7 @@ Edits never change that file: each edited or added subcontractor is saved as its
 ## Who can use it (Admin tab)
 Admins manage access in the **Admin** tab:
 - **Add people** by their Microsoft email. Anyone not listed can't see anything.
-- **Business units:** give each person one or more business units; they only see subcontractors within the radius (default 200 miles, set in the Admin tab) of those offices. Or tick **All business units**.
+- **Business units:** give each person one or more business units; they only see subcontractors within each office's radius (set per business unit in the Admin tab, default 200 miles). Or tick **All business units**.
 - **Admin:** can add, import, edit and rate subcontractors, sees everything, and can use the Admin tab. Everyone else is read-only.
 
 Admins are edited in the Admin tab like everyone else. To prevent lockouts, the list must keep at least one admin and admins can't remove their own admin access. As a break-glass option, emails in the `ADMIN_EMAILS` environment variable on the container app are always admins. Business unit offices are listed in `server/businessUnits.js`. The access list is stored in storage as `settings/access.json`.

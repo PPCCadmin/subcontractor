@@ -69,7 +69,8 @@ export default function App() {
 
     return visibleSubs.filter(sub => {
       if (query) {
-        const searchable = `${sub.companyName || ''} ${sub.city || ''} ${sub.state || ''} ${sub.contactName || ''} ${sub.notes || ''}`.toLowerCase()
+        const contacts = (sub.contacts || []).map(contact => `${contact.name || ''} ${contact.email || ''}`).join(' ')
+        const searchable = `${sub.companyName || ''} ${sub.city || ''} ${sub.state || ''} ${contacts} ${sub.notes || ''}`.toLowerCase()
         if (!searchable.includes(query)) return false
       }
 

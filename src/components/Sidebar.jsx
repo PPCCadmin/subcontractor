@@ -86,21 +86,33 @@ export default function Sidebar({
     }
   }
 
+  // 'default' = nearest first when a job location is set, otherwise list order.
+  const [sortBy, setSortBy] = React.useState('default')
+
   const sorted = React.useMemo(() => {
-    if (!jobLocation) return filteredSubs
+    let list = filteredSubs
 
-    const origin = turf.point([jobLocation.lng, jobLocation.lat])
+    if (jobLocation) {
+      const origin = turf.point([jobLocation.lng, jobLocation.lat])
+      list = list.map(sub => ({
+        ...sub,
+        _dist: sub.lat == null || sub.lng == null
+          ? Infinity
+          : turf.distance(origin, turf.point([sub.lng, sub.lat]), { units: 'miles' }),
+      }))
+    }
 
-    return [...filteredSubs]
-      .map(sub => {
-        if (sub.lat == null || sub.lng == null) return { ...sub, _dist: Infinity }
-        return {
-          ...sub,
-          _dist: turf.distance(origin, turf.point([sub.lng, sub.lat]), { units: 'miles' }),
-        }
-      })
-      .sort((a, b) => a._dist - b._dist)
-  }, [filteredSubs, jobLocation])
+    if (sortBy === 'rating') {
+      // Highest average first, more ratings breaks ties, unrated last.
+      return list
+        .map(sub => ({ sub, rating: ratingSummary(sub) }))
+        .sort((a, b) => (b.rating.average ?? -1) - (a.rating.average ?? -1) || b.rating.count - a.rating.count || a.sub.companyName.localeCompare(b.sub.companyName))
+        .map(item => item.sub)
+    }
+    if (sortBy === 'name') return [...list].sort((a, b) => String(a.companyName).localeCompare(String(b.companyName)))
+    if (jobLocation) return [...list].sort((a, b) => a._dist - b._dist)
+    return list
+  }, [filteredSubs, jobLocation, sortBy])
 
   const hasFilters = Boolean(filters.search || filters.services.size || filters.statuses.size || filters.selfPerformOnly)
 
@@ -111,9 +123,11 @@ export default function Sidebar({
           <div>
             <div className="sidebar-title-main">Subcontractors</div>
             <div className="sidebar-title-sub">
-              {areas?.length
-                ? `${subs.length.toLocaleString()} within ${areas[0].radiusMiles} mi of ${areas.map(area => area.name).join(', ')}`
-                : `${subs.length.toLocaleString()} on record`}
+              {!areas?.length
+                ? `${subs.length.toLocaleString()} on record`
+                : areas.every(area => area.radiusMiles === areas[0].radiusMiles)
+                  ? `${subs.length.toLocaleString()} within ${areas[0].radiusMiles} mi of ${areas.map(area => area.name).join(', ')}`
+                  : `${subs.length.toLocaleString()} near ${areas.map(area => `${area.name} (${area.radiusMiles} mi)`).join(', ')}`}
             </div>
           </div>
           <div className="header-actions">
@@ -219,8 +233,15 @@ export default function Sidebar({
       <div className="results-header">
         <div>
           <strong>{sorted.length.toLocaleString()}</strong> match{sorted.length === 1 ? '' : 'es'}
-          {jobLocation && ' · sorted by distance'}
         </div>
+        <label className="sort-control">
+          Sort
+          <select value={sortBy} onChange={event => setSortBy(event.target.value)}>
+            <option value="default">{jobLocation ? 'Nearest to job' : 'Default'}</option>
+            <option value="rating">Best rated</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </label>
         {hasFilters && (
           <button type="button" className="clear-filter-btn" onClick={clearFilters}>Clear filters</button>
         )}

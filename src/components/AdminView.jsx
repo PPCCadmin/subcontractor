@@ -4,12 +4,17 @@ import { PlusIcon, TrashIcon, SearchIcon } from './icons.jsx'
 
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
+// Each business unit's radius, falling back to the default.
+function unitRadii(data) {
+  return Object.fromEntries((data.businessUnits || []).map(unit => [unit.key, data.unitRadius?.[unit.key] || data.radiusMiles]))
+}
+
 // Admin tab: choose who can use SubFinder, which business units each person
 // sees, and who is an admin. Changes apply when the person next loads the site.
 export default function AdminView({ currentEmail }) {
   const [loaded, setLoaded] = useState(null)
   const [users, setUsers] = useState([])
-  const [radius, setRadius] = useState(200)
+  const [radii, setRadii] = useState({})
   const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
@@ -23,14 +28,14 @@ export default function AdminView({ currentEmail }) {
       .then(data => {
         setLoaded(data)
         setUsers(data.users || [])
-        setRadius(data.radiusMiles)
+        setRadii(unitRadii(data))
         setMessage(null)
       })
       .catch(error => setLoadError(error.message))
   }
   useEffect(load, [])
 
-  const dirty = loaded && (radius !== loaded.radiusMiles || JSON.stringify(users) !== JSON.stringify(loaded.users || []))
+  const dirty = loaded && (JSON.stringify(radii) !== JSON.stringify(unitRadii(loaded)) || JSON.stringify(users) !== JSON.stringify(loaded.users || []))
 
   useEffect(() => {
     if (!dirty) return undefined
@@ -64,10 +69,10 @@ export default function AdminView({ currentEmail }) {
     setSaving(true)
     setMessage(null)
     try {
-      const data = await saveAccess({ users, radiusMiles: Number(radius), version: loaded.version })
+      const data = await saveAccess({ users, radiusMiles: loaded.radiusMiles, unitRadius: radii, version: loaded.version })
       setLoaded(previous => ({ ...previous, ...data }))
       setUsers(data.users)
-      setRadius(data.radiusMiles)
+      setRadii(unitRadii({ ...loaded, ...data }))
       setMessage({ type: 'success', text: 'Saved. People will see the change the next time they load SubFinder.' })
     } catch (error) {
       setMessage({ type: 'error', text: error.message })
@@ -99,19 +104,33 @@ export default function AdminView({ currentEmail }) {
       </div>
 
       {!loaded.canSave && (
-        <div className="banner banner-warn">Storage isn't working, so the access list can't be saved right now. Only built-in admins can get in.</div>
+        <div className="banner banner-warn">Storage isn't working, so the access list can't be saved right now. Only existing admins can get in.</div>
       )}
 
       <section className="admin-card">
         <h3>Business unit radius</h3>
-        <div className="admin-radius">
-          People assigned a business unit see subcontractors within
-          <input type="number" min="1" max="3000" value={radius} onChange={event => setRadius(event.target.value === '' ? '' : Number(event.target.value))} />
-          miles of that office.
+        <p className="admin-note">People assigned a business unit see subcontractors within this many miles of its office.</p>
+        <div className="admin-units">
+          {loaded.businessUnits.map(unit => (
+            <div key={unit.key} className="admin-unit">
+              <div className="admin-unit-name">
+                <strong>{unit.name}</strong>
+                <span className="admin-note">{unit.address}</span>
+              </div>
+              <label className="admin-unit-radius">
+                <input
+                  type="number"
+                  min="1"
+                  max="3000"
+                  value={radii[unit.key] ?? ''}
+                  aria-label={`${unit.name} radius in miles`}
+                  onChange={event => setRadii(previous => ({ ...previous, [unit.key]: event.target.value === '' ? '' : Number(event.target.value) }))}
+                />
+                mi
+              </label>
+            </div>
+          ))}
         </div>
-        <ul className="admin-units">
-          {loaded.businessUnits.map(unit => <li key={unit.key}><strong>{unit.name}</strong> · {unit.address}</li>)}
-        </ul>
       </section>
 
       <section className="admin-card">

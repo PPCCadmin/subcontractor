@@ -10,6 +10,8 @@ import {
   SERVICE_DELIVERY,
   STATUSES,
   serviceDelivery,
+  primaryContact,
+  primaryContactFields,
 } from '../data.js'
 import { CloseIcon, TrashIcon, UploadIcon, DownloadIcon, PhoneIcon, PlusIcon, WarningIcon } from './icons.jsx'
 import { daysUntil, ratingSummary } from '../lib/metrics.js'
@@ -58,7 +60,7 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
       </div>
 
       <div className="detail-body">
-        {tab === 'Info' && <InfoTab sub={sub} patch={patch} canEdit={canEdit} />}
+        {tab === 'Info' && <InfoTab sub={sub} patch={patch} canEdit={canEdit} onEditContacts={() => setTab('Contacts')} />}
         {tab === 'Ratings' && <RatingsTab sub={sub} canEdit={canEdit} user={user} onRate={onRate} onUnrate={onUnrate} />}
         {tab === 'Contacts' && <ContactsTab sub={sub} patch={patch} canEdit={canEdit} />}
         {tab === 'Equipment' && <EquipmentTab sub={sub} patch={patch} canEdit={canEdit} />}
@@ -70,7 +72,9 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
   )
 }
 
-function InfoTab({ sub, patch, canEdit }) {
+function InfoTab({ sub, patch, canEdit, onEditContacts }) {
+  if (!canEdit) return <InfoView sub={sub} />
+
   const toggleService = service => {
     const current = sub.canonicalServices || []
     if (current.includes(service)) {
@@ -94,8 +98,10 @@ function InfoTab({ sub, patch, canEdit }) {
     patch({ projectScales: current.includes(scale) ? current.filter(item => item !== scale) : [...current, scale] })
   }
 
+  const main = primaryContact(sub)
+
   return (
-    <fieldset className="readonly-fieldset" disabled={!canEdit}>
+    <>
       <Section title="Overview">
         <div className="field-row">
           <Field label="Status">
@@ -111,30 +117,17 @@ function InfoTab({ sub, patch, canEdit }) {
             </select>
           </Field>
         </div>
+        <div className="field-row">
+          <Field label="Main Phone"><input value={sub.phone || ''} onChange={event => patch({ phone: event.target.value || null })} /></Field>
+          <Field label="Website"><input value={sub.website || ''} onChange={event => patch({ website: event.target.value || null })} /></Field>
+        </div>
       </Section>
 
-      <Section title="Primary Contact">
-        <div className="field-row">
-          <Field label="Contact Name"><input value={sub.contactName || ''} onChange={event => patch({ contactName: event.target.value || null })} /></Field>
-          <Field label="Position"><input value={sub.position || ''} onChange={event => patch({ position: event.target.value || null })} /></Field>
-        </div>
-        <div className="field-row">
-          <Field label="Business Phone"><input value={sub.phone || ''} onChange={event => patch({ phone: event.target.value || null })} /></Field>
-          <Field label="Cell"><input value={sub.cellPhone || ''} onChange={event => patch({ cellPhone: event.target.value || null })} /></Field>
-        </div>
-        <Field label="Email"><input type="email" value={sub.email || ''} onChange={event => patch({ email: event.target.value || null })} /></Field>
-        <Field label="Website"><input value={sub.website || ''} onChange={event => patch({ website: event.target.value || null })} /></Field>
-      </Section>
-
-      <Section title="Secondary Contact">
-        <div className="field-row">
-          <Field label="Contact Name"><input value={sub.contactName2 || ''} onChange={event => patch({ contactName2: event.target.value || null })} /></Field>
-          <Field label="Position"><input value={sub.position2 || ''} onChange={event => patch({ position2: event.target.value || null })} /></Field>
-        </div>
-        <div className="field-row">
-          <Field label="Cell"><input value={sub.cellPhone2 || ''} onChange={event => patch({ cellPhone2: event.target.value || null })} /></Field>
-          <Field label="Email"><input type="email" value={sub.email2 || ''} onChange={event => patch({ email2: event.target.value || null })} /></Field>
-        </div>
+      <Section title="Main Contact">
+        {main ? <ContactCard contact={main} /> : <div className="li-meta">No contacts yet.</div>}
+        <button type="button" className="btn secondary btn-sm edit-contacts-btn" onClick={onEditContacts}>
+          {main ? 'Edit contacts' : 'Add a contact'}
+        </button>
       </Section>
 
       <Section title="Services">
@@ -200,7 +193,100 @@ function InfoTab({ sub, patch, canEdit }) {
       <Section title="Notes">
         <Field label=""><textarea value={sub.notes || ''} onChange={event => patch({ notes: event.target.value })} placeholder="Relationship context, travel exceptions, strengths, weaknesses, and vetting notes" /></Field>
       </Section>
-    </fieldset>
+    </>
+  )
+}
+
+// What view-only users see on the Info tab: plain text and links, no form.
+function InfoView({ sub }) {
+  const main = primaryContact(sub)
+  const services = sub.canonicalServices || []
+  const scales = sub.projectScales || []
+
+  return (
+    <>
+      <Section title="Overview">
+        <dl className="view-grid">
+          <dt>Status</dt>
+          <dd><span className={`pill pill-${(sub.status || 'New').replace(/\s+/g, '')}`}>{sub.status || 'New'}</span></dd>
+          <dt>Business structure</dt>
+          <dd>{sub.businessStructure || <Empty />}</dd>
+          <dt>Main phone</dt>
+          <dd>{sub.phone ? <a href={`tel:${sub.phone}`}>{sub.phone}</a> : <Empty />}</dd>
+          <dt>Website</dt>
+          <dd>{sub.website ? <a href={websiteUrl(sub.website)} target="_blank" rel="noreferrer">{sub.website}</a> : <Empty />}</dd>
+        </dl>
+      </Section>
+
+      <Section title="Main Contact">
+        {main ? <ContactCard contact={main} /> : <div className="li-meta">No contact on file.</div>}
+      </Section>
+
+      <Section title="Services">
+        {services.length ? (
+          <ul className="view-services">
+            {services.map(service => {
+              const delivery = serviceDelivery(sub, service)
+              return (
+                <li key={service}>
+                  <span>{service}</span>
+                  {delivery === 'self' && <span className="mini-chip delivery-self">Self-performs</span>}
+                  {delivery === 'subs' && <span className="mini-chip delivery-subs">Subs out</span>}
+                </li>
+              )
+            })}
+          </ul>
+        ) : <Empty />}
+      </Section>
+
+      <Section title="Project Scales">
+        {scales.length ? <div className="chips">{scales.map(scale => <span key={scale} className="mini-chip">{scale}</span>)}</div> : <Empty />}
+      </Section>
+
+      <Section title="Vetting and Documentation">
+        <dl className="view-grid">
+          <dt>MSA on file</dt>
+          <dd>{sub.msaStatus ? `Yes${sub.msaEffectiveDate ? `, effective ${sub.msaEffectiveDate}` : ''}` : 'No'}</dd>
+          <dt>W-9 on file</dt>
+          <dd>{sub.w9OnFile ? 'Yes' : 'No'}</dd>
+        </dl>
+      </Section>
+
+      <Section title="Notes">
+        {sub.notes ? <p className="view-notes">{sub.notes}</p> : <Empty />}
+      </Section>
+    </>
+  )
+}
+
+function Empty() {
+  return <span className="view-empty">Not on file</span>
+}
+
+function websiteUrl(value) {
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`
+}
+
+function ContactCard({ contact, children }) {
+  const phones = [
+    contact.phone && { label: 'Phone', value: contact.phone },
+    contact.cellPhone && { label: 'Cell', value: contact.cellPhone },
+  ].filter(Boolean)
+  return (
+    <div className="contact-card">
+      <div className="contact-card-body">
+        <div className="li-name">
+          {contact.name ? <strong>{contact.name}</strong> : <span className="view-empty">Name not on file</span>}
+          {contact.role && <span className="mini-chip">{contact.role}</span>}
+          {contact.primary && <span className="mini-chip chip-primary">Main contact</span>}
+        </div>
+        {phones.map(phone => (
+          <div key={phone.label} className="li-meta"><PhoneIcon /> <a href={`tel:${phone.value}`}>{phone.value}</a> <span className="contact-label">{phone.label}</span></div>
+        ))}
+        {contact.email && <div className="li-meta"><a href={`mailto:${contact.email}`}>{contact.email}</a></div>}
+      </div>
+      {children}
+    </div>
   )
 }
 
@@ -307,47 +393,91 @@ function RatingsTab({ sub, canEdit, user, onRate, onUnrate }) {
   )
 }
 
+const EMPTY_CONTACT = { name: '', role: 'Estimator', phone: '', cellPhone: '', email: '' }
+
 function ContactsTab({ sub, patch, canEdit }) {
-  const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ name: '', role: 'Estimator', phone: '', cellPhone: '', email: '' })
+  const [editingId, setEditingId] = useState(null) // contact id, 'new', or null
+  const [form, setForm] = useState(EMPTY_CONTACT)
+  const [error, setError] = useState('')
   const contacts = sub.contacts || []
   const set = (key, value) => setForm(previous => ({ ...previous, [key]: value }))
 
-  const add = () => {
-    if (!form.name.trim()) return alert('Name required')
-    patch({ contacts: [...contacts, { id: crypto.randomUUID(), ...form }] })
-    setForm({ name: '', role: 'Estimator', phone: '', cellPhone: '', email: '' })
-    setAdding(false)
+  // Save the list and keep the top-level copy of the main contact in step.
+  const saveContacts = next => patch({ contacts: next, ...primaryContactFields(next) })
+
+  const startEdit = contact => {
+    setForm(contact ? { ...EMPTY_CONTACT, ...contact } : EMPTY_CONTACT)
+    setEditingId(contact ? contact.id : 'new')
+    setError('')
   }
+
+  const save = () => {
+    if (!form.name.trim()) return setError('Name is required.')
+    const fields = {
+      name: form.name.trim(),
+      role: form.role,
+      phone: form.phone.trim() || null,
+      cellPhone: form.cellPhone.trim() || null,
+      email: form.email.trim() || null,
+    }
+    if (editingId === 'new') {
+      saveContacts([...contacts, { id: crypto.randomUUID(), ...fields, primary: contacts.length === 0 }])
+    } else {
+      saveContacts(contacts.map(contact => contact.id === editingId ? { ...contact, ...fields } : contact))
+    }
+    setEditingId(null)
+  }
+
+  const makePrimary = id => {
+    const next = contacts.map(contact => ({ ...contact, primary: contact.id === id }))
+    const main = next.find(contact => contact.primary)
+    saveContacts([main, ...next.filter(contact => contact !== main)])
+  }
+
+  // Removing the main contact promotes the next one.
+  const remove = id => {
+    const next = contacts.filter(contact => contact.id !== id)
+    if (next.length && !next.some(contact => contact.primary)) next[0] = { ...next[0], primary: true }
+    saveContacts(next)
+  }
+
+  const contactForm = (
+    <div className="inline-form">
+      <div className="field-row">
+        <Field label="Name"><input value={form.name} onChange={event => set('name', event.target.value)} autoFocus /></Field>
+        <Field label="Role"><select value={form.role} onChange={event => set('role', event.target.value)}>{CONTACT_ROLES.map(role => <option key={role}>{role}</option>)}</select></Field>
+      </div>
+      <div className="field-row">
+        <Field label="Phone"><input value={form.phone || ''} onChange={event => set('phone', event.target.value)} /></Field>
+        <Field label="Cell"><input value={form.cellPhone || ''} onChange={event => set('cellPhone', event.target.value)} /></Field>
+      </div>
+      <Field label="Email"><input type="email" value={form.email || ''} onChange={event => set('email', event.target.value)} /></Field>
+      {error && <div className="form-error">{error}</div>}
+      <FormButtons onSave={save} onCancel={() => setEditingId(null)} />
+    </div>
+  )
 
   return (
     <Section title={`Contacts (${contacts.length})`}>
       {contacts.map(contact => (
-        <div key={contact.id} className="list-item">
-          <div className="list-item-content">
-            <div className="li-name"><strong>{contact.name}</strong><span className="mini-chip">{contact.role}</span></div>
-            {contact.phone && <div className="li-meta"><PhoneIcon /> {contact.phone}</div>}
-            {contact.cellPhone && <div className="li-meta"><PhoneIcon /> {contact.cellPhone} (cell)</div>}
-            {contact.email && <div className="li-meta">{contact.email}</div>}
-          </div>
-          {canEdit && <button className="icon-only-btn" onClick={() => patch({ contacts: contacts.filter(item => item.id !== contact.id) })}><TrashIcon /></button>}
-        </div>
+        editingId === contact.id ? <div key={contact.id}>{contactForm}</div> : (
+          <ContactCard key={contact.id} contact={contact}>
+            {canEdit && (
+              <div className="contact-actions">
+                {!contact.primary && <button className="btn secondary btn-sm" onClick={() => makePrimary(contact.id)}>Make main</button>}
+                <button className="btn secondary btn-sm" onClick={() => startEdit(contact)}>Edit</button>
+                <button className="icon-only-btn" title={`Remove ${contact.name}`} onClick={() => remove(contact.id)}><TrashIcon /></button>
+              </div>
+            )}
+          </ContactCard>
+        )
       ))}
 
-      {canEdit && (adding ? (
-        <div className="inline-form">
-          <div className="field-row">
-            <Field label="Name"><input value={form.name} onChange={event => set('name', event.target.value)} autoFocus /></Field>
-            <Field label="Role"><select value={form.role} onChange={event => set('role', event.target.value)}>{CONTACT_ROLES.map(role => <option key={role}>{role}</option>)}</select></Field>
-          </div>
-          <div className="field-row">
-            <Field label="Phone"><input value={form.phone} onChange={event => set('phone', event.target.value)} /></Field>
-            <Field label="Cell"><input value={form.cellPhone} onChange={event => set('cellPhone', event.target.value)} /></Field>
-          </div>
-          <Field label="Email"><input type="email" value={form.email} onChange={event => set('email', event.target.value)} /></Field>
-          <FormButtons onSave={add} onCancel={() => setAdding(false)} />
-        </div>
-      ) : <button className="btn secondary add-row-btn" onClick={() => setAdding(true)}><PlusIcon /> Add Contact</button>)}
+      {!contacts.length && <div className="li-meta">No contacts on file.</div>}
+
+      {canEdit && (editingId === 'new'
+        ? contactForm
+        : <button className="btn secondary add-row-btn" onClick={() => startEdit(null)}><PlusIcon /> Add Contact</button>)}
     </Section>
   )
 }

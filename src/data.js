@@ -19,32 +19,61 @@ function normalizedServices(sub) {
   return services
 }
 
-export function migrate(sub) {
-  let contacts = sub.contacts
+// Contacts live in sub.contacts; exactly one is marked primary. Older records
+// also kept the primary/secondary contact in top-level fields (contactName,
+// position, cellPhone, email, contactName2...) that the Info tab edited, so
+// fold those in once: they win over the matching contact in the list.
+const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
+const filled = fields => Object.fromEntries(Object.entries(fields).filter(([, value]) => value))
 
-  if (!contacts) {
-    contacts = []
-    if (sub.contactName) {
-      contacts.push({
-        id: crypto.randomUUID(),
-        name: sub.contactName,
-        role: sub.position || 'Other',
-        phone: sub.phone,
-        cellPhone: sub.cellPhone,
-        email: sub.email,
-      })
+function reconcileContacts(sub) {
+  if (sub.contactsVersion === 2) return sub.contacts || []
+  const contacts = (sub.contacts || []).map(contact => ({ ...contact, primary: false }))
+
+  const upsert = (fields, id) => {
+    if (!fields.name && !fields.cellPhone && !fields.email) return null
+    const match = fields.name ? contacts.find(contact => sameName(contact.name, fields.name)) : null
+    if (match) {
+      Object.assign(match, filled(fields))
+      return match
     }
-    if (sub.contactName2) {
-      contacts.push({
-        id: crypto.randomUUID(),
-        name: sub.contactName2,
-        role: sub.position2 || 'Other',
-        phone: null,
-        cellPhone: sub.cellPhone2,
-        email: sub.email2,
-      })
-    }
+    const contact = { id, name: '', role: null, phone: null, cellPhone: null, email: null, ...filled(fields) }
+    contacts.push(contact)
+    return contact
   }
+
+  const primary = upsert({ name: sub.contactName, role: sub.position, cellPhone: sub.cellPhone, email: sub.email }, `${sub.id}-primary`)
+  upsert({ name: sub.contactName2, role: sub.position2, cellPhone: sub.cellPhone2, email: sub.email2 }, `${sub.id}-secondary`)
+
+  const main = primary || contacts[0]
+  if (main) {
+    main.primary = true
+    // Keep the primary first in the list.
+    contacts.splice(contacts.indexOf(main), 1)
+    contacts.unshift(main)
+  }
+  return contacts
+}
+
+export function primaryContact(sub) {
+  const contacts = sub.contacts || []
+  return contacts.find(contact => contact.primary) || contacts[0] || null
+}
+
+// Top-level copies of the primary contact, kept for search, duplicate
+// detection and CSV export.
+export function primaryContactFields(contacts) {
+  const main = contacts.find(contact => contact.primary) || contacts[0] || null
+  return {
+    contactName: main?.name || null,
+    position: main?.role || null,
+    cellPhone: main?.cellPhone || null,
+    email: main?.email || null,
+  }
+}
+
+export function migrate(sub) {
+  const contacts = reconcileContacts(sub)
 
   let status = sub.status
   if (status === 'Do Not Use') status = 'DNU'
@@ -59,6 +88,7 @@ export function migrate(sub) {
     canonicalServices: normalized,
     businessStructure: sub.businessStructure || null,
     contacts,
+    contactsVersion: 2,
     contactName2: sub.contactName2 ?? null,
     position2: sub.position2 ?? null,
     cellPhone2: sub.cellPhone2 ?? null,

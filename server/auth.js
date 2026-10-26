@@ -74,12 +74,12 @@ export function createAuth(access) {
     const base = { authenticated: true, email, name: name || email }
 
     const builtIn = EMERGENCY_ADMINS.includes(email) || roles.some(role => ADMIN_APP_ROLES.includes(role))
-    const { entry, radiusMiles } = await access.lookup(email)
+    const { entry, radiusFor } = await access.lookup(email)
     if (builtIn || entry?.admin) return { ...base, role: 'admin', builtInAdmin: builtIn, allBusinessUnits: true, areas: [] }
     if (!entry) return { ...base, role: 'none', reason: 'not-listed', allBusinessUnits: false, areas: [] }
     if (entry.allBusinessUnits) return { ...base, role: 'viewer', allBusinessUnits: true, areas: [] }
 
-    const areas = entry.businessUnits.map(businessUnit).filter(Boolean).map(unit => ({ ...unit, radiusMiles }))
+    const areas = entry.businessUnits.map(businessUnit).filter(Boolean).map(unit => ({ ...unit, radiusMiles: radiusFor(unit.key) }))
     if (!areas.length) return { ...base, role: 'none', reason: 'no-business-units', allBusinessUnits: false, areas: [] }
     return { ...base, role: 'viewer', allBusinessUnits: false, areas }
   }

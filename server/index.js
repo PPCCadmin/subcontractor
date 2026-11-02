@@ -12,7 +12,7 @@ import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { createAuth, EMERGENCY_ADMINS } from './auth.js'
 import { createAccess, AccessValidationError } from './access.js'
-import { BUSINESS_UNITS, withinAreas } from './businessUnits.js'
+import { BUSINESS_UNITS, cleanVisibleUnits, visibleToUser } from './businessUnits.js'
 import { openStore, ConflictError, describeStorageError } from './store.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -72,7 +72,12 @@ async function updateSub(id, change) {
 
 app.get('/health', (req, res) => res.type('text/plain').send('healthy\n'))
 
-app.get('/api/me', asyncRoute(async (req, res) => res.set('Cache-Control', 'no-store').json(await getUser(req))))
+app.get('/api/me', asyncRoute(async (req, res) => {
+  const user = await getUser(req)
+  // Admins pick business units when limiting who sees a subcontractor.
+  const businessUnits = user.role === 'admin' ? BUSINESS_UNITS.map(({ key, name }) => ({ key, name })) : undefined
+  res.set('Cache-Control', 'no-store').json({ ...user, businessUnits })
+}))
 
 app.get('/api/subs', asyncRoute(async (req, res) => {
   let saved = []
@@ -93,7 +98,7 @@ app.get('/api/subs', asyncRoute(async (req, res) => {
   const user = await getUser(req)
   let visible = subs
   if (user.role === 'none') visible = []
-  else if (!user.allBusinessUnits) visible = subs.filter(sub => withinAreas(sub, user.areas))
+  else if (user.role !== 'admin') visible = subs.filter(sub => visibleToUser(sub, user))
 
   res.set('Cache-Control', 'no-store').json({
     saving: user.role === 'admin' && Boolean(store) && !problem,
@@ -106,6 +111,7 @@ app.get('/api/subs', asyncRoute(async (req, res) => {
 // the rating endpoints so one admin can never overwrite another's rating.
 app.put('/api/subs/:id', requireAdmin, requireStore, asyncRoute(async (req, res) => {
   const incoming = clean(req.body)
+  incoming.visibleBusinessUnits = cleanVisibleUnits(incoming.visibleBusinessUnits)
   const saved = await updateSub(req.params.id, current => ({
     ...incoming,
     id: req.params.id,
@@ -125,6 +131,7 @@ app.post('/api/subs', requireAdmin, requireStore, asyncRoute(async (req, res) =>
   const created = []
   for (const raw of incoming) {
     const sub = { ...clean(raw), ratings: [], createdAt: now, createdBy: req.user.email }
+    sub.visibleBusinessUnits = cleanVisibleUnits(sub.visibleBusinessUnits)
     if (!sub.id || seedById.has(sub.id)) sub.id = crypto.randomUUID()
     try {
       await store.put(sub.id, sub, null)

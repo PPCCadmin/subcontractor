@@ -33,6 +33,25 @@ export function milesBetween(a, b) {
   return 3958.8 * 2 * Math.asin(Math.sqrt(h))
 }
 
+// Admins can limit a subcontractor to chosen business units
+// (sub.visibleBusinessUnits, e.g. ['macadam', 'gsps']). Returns the cleaned list,
+// or null when it's open to every business unit in range. An empty list means
+// limited to nobody yet (admins and all-business-unit users only).
+export function cleanVisibleUnits(list) {
+  if (!Array.isArray(list)) return null
+  return [...new Set(list.filter(key => byKey.has(key)))]
+}
+
+// Whether a non-admin user may see a subcontractor:
+// - limited to chosen business units: only people in one of those units (or
+//   with all business units) see it, wherever it is
+// - otherwise: everyone within radius of one of their business units
+export function visibleToUser(sub, user) {
+  const limitedTo = cleanVisibleUnits(sub.visibleBusinessUnits)
+  if (limitedTo) return user.allBusinessUnits || user.areas.some(area => limitedTo.includes(area.key))
+  return user.allBusinessUnits || withinAreas(sub, user.areas)
+}
+
 // True when the subcontractor is within radius of any of the user's areas.
 // Subcontractors with no map location can't be placed inside a radius, so
 // they are left out.

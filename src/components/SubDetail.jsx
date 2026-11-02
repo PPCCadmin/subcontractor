@@ -16,11 +16,12 @@ import {
 import { CloseIcon, TrashIcon, UploadIcon, DownloadIcon, PhoneIcon, PlusIcon, WarningIcon } from './icons.jsx'
 import { daysUntil, ratingSummary } from '../lib/metrics.js'
 import { StarDisplay, StarInput } from './Stars.jsx'
+import VisibilityPicker, { visibilityLabel } from './VisibilityPicker.jsx'
 import * as turf from '@turf/turf'
 
 const TABS = ['Info', 'Ratings', 'Contacts', 'Equipment', 'Licenses', 'Files', 'Metrics']
 
-export default function SubDetail({ sub, jobLocation, projects = [], canEdit = false, user = null, saveState, onRate, onUnrate, onClose, onChange }) {
+export default function SubDetail({ sub, jobLocation, projects = [], canEdit = false, user = null, businessUnits = [], saveState, onRate, onUnrate, onClose, onChange }) {
   const [tab, setTab] = useState('Info')
   if (!sub) return null
 
@@ -46,6 +47,9 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
                 <StarDisplay value={rating.average} size={12} /> {rating.average.toFixed(1)} ({rating.count})
               </button>
             )}
+            {canEdit && visibilityLabel(sub.visibleBusinessUnits, businessUnits) && (
+              <span className="pill pill-limited" title="Only these business units can see this subcontractor">{visibilityLabel(sub.visibleBusinessUnits, businessUnits)}</span>
+            )}
             {!canEdit && <span className="pill pill-readonly">Read only</span>}
             {canEdit && <SaveStatus state={saveState} />}
           </div>
@@ -60,7 +64,7 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
       </div>
 
       <div className="detail-body">
-        {tab === 'Info' && <InfoTab sub={sub} patch={patch} canEdit={canEdit} onEditContacts={() => setTab('Contacts')} />}
+        {tab === 'Info' && <InfoTab sub={sub} patch={patch} canEdit={canEdit} businessUnits={businessUnits} onEditContacts={() => setTab('Contacts')} />}
         {tab === 'Ratings' && <RatingsTab sub={sub} canEdit={canEdit} user={user} onRate={onRate} onUnrate={onUnrate} />}
         {tab === 'Contacts' && <ContactsTab sub={sub} patch={patch} canEdit={canEdit} />}
         {tab === 'Equipment' && <EquipmentTab sub={sub} patch={patch} canEdit={canEdit} />}
@@ -72,7 +76,7 @@ export default function SubDetail({ sub, jobLocation, projects = [], canEdit = f
   )
 }
 
-function InfoTab({ sub, patch, canEdit, onEditContacts }) {
+function InfoTab({ sub, patch, canEdit, businessUnits, onEditContacts }) {
   if (!canEdit) return <InfoView sub={sub} />
 
   const toggleService = service => {
@@ -121,6 +125,14 @@ function InfoTab({ sub, patch, canEdit, onEditContacts }) {
           <Field label="Main Phone"><input value={sub.phone || ''} onChange={event => patch({ phone: event.target.value || null })} /></Field>
           <Field label="Website"><input value={sub.website || ''} onChange={event => patch({ website: event.target.value || null })} /></Field>
         </div>
+      </Section>
+
+      <Section title="Who Can See This Subcontractor">
+        <VisibilityPicker
+          units={businessUnits}
+          value={Array.isArray(sub.visibleBusinessUnits) ? sub.visibleBusinessUnits : null}
+          onChange={value => patch({ visibleBusinessUnits: value })}
+        />
       </Section>
 
       <Section title="Main Contact">

@@ -246,6 +246,7 @@ export default function App() {
                 projects={projects}
                 canEdit={admin}
                 user={user}
+                businessUnits={user.businessUnits || []}
                 saveState={saveState}
                 onRate={rate}
                 onUnrate={unrate}
@@ -269,7 +270,7 @@ export default function App() {
       )}
 
       {showAdd && admin && (
-        <AddSubModal existingSubs={subs} onClose={() => setShowAdd(false)} onCreate={createSub} />
+        <AddSubModal existingSubs={subs} businessUnits={user.businessUnits || []} onClose={() => setShowAdd(false)} onCreate={createSub} />
       )}
 
       {showImport && admin && (

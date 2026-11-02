@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { STATUSES } from '../data.js'
 import { CloseIcon } from './icons.jsx'
 import { buildSub, findDuplicate } from '../lib/subUtils.js'
+import VisibilityPicker from './VisibilityPicker.jsx'
 
 const EMPTY = {
   companyName: '',
@@ -25,8 +26,9 @@ const EMPTY = {
   w9OnFile: false,
 }
 
-export default function AddSubModal({ existingSubs, onClose, onCreate }) {
+export default function AddSubModal({ existingSubs, businessUnits = [], onClose, onCreate }) {
   const [form, setForm] = useState(EMPTY)
+  const [visibleUnits, setVisibleUnits] = useState(null)
   const [duplicate, setDuplicate] = useState(null)
   const set = (key, value) => setForm(previous => ({ ...previous, [key]: value }))
 
@@ -38,8 +40,9 @@ export default function AddSubModal({ existingSubs, onClose, onCreate }) {
     if (!form.companyName.trim()) return alert('Company name is required.')
     const match = findDuplicate(existingSubs, form)
     if (match && !force) return setDuplicate(match)
+    if (Array.isArray(visibleUnits) && !visibleUnits.length) return alert('Pick at least one business unit, or choose "All business units within range".')
     try {
-      await onCreate(buildSub(form))
+      await onCreate({ ...buildSub(form), visibleBusinessUnits: visibleUnits })
       onClose()
     } catch (error) {
       alert(`Could not add subcontractor: ${error.message}`)
@@ -97,6 +100,10 @@ export default function AddSubModal({ existingSubs, onClose, onCreate }) {
           <div className="field"><label>Status</label><select value={form.status} onChange={event => set('status', event.target.value)}>{STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></div>
           <div className="field"><label>W-9 on File</label><select value={form.w9OnFile ? 'yes' : 'no'} onChange={event => set('w9OnFile', event.target.value === 'yes')}><option value="no">No</option><option value="yes">Yes</option></select></div>
           <div className="field"><label>Notes</label><textarea value={form.notes} onChange={event => set('notes', event.target.value)} /></div>
+          <div className="field">
+            <label>Who can see this subcontractor</label>
+            <VisibilityPicker units={businessUnits} value={visibleUnits} onChange={setVisibleUnits} />
+          </div>
         </div>
 
         <div className="modal-footer">

@@ -106,6 +106,15 @@ function InfoTab({ sub, patch, canEdit, businessUnits, onEditContacts }) {
 
   return (
     <>
+      <div className="visibility-box">
+        <div className="visibility-title">Who can see this subcontractor?</div>
+        <VisibilityPicker
+          units={businessUnits}
+          value={Array.isArray(sub.visibleBusinessUnits) ? sub.visibleBusinessUnits : null}
+          onChange={value => patch({ visibleBusinessUnits: value })}
+        />
+      </div>
+
       <Section title="Overview">
         <div className="field-row">
           <Field label="Status">
@@ -125,14 +134,6 @@ function InfoTab({ sub, patch, canEdit, businessUnits, onEditContacts }) {
           <Field label="Main Phone"><input value={sub.phone || ''} onChange={event => patch({ phone: event.target.value || null })} /></Field>
           <Field label="Website"><input value={sub.website || ''} onChange={event => patch({ website: event.target.value || null })} /></Field>
         </div>
-      </Section>
-
-      <Section title="Who Can See This Subcontractor">
-        <VisibilityPicker
-          units={businessUnits}
-          value={Array.isArray(sub.visibleBusinessUnits) ? sub.visibleBusinessUnits : null}
-          onChange={value => patch({ visibleBusinessUnits: value })}
-        />
       </Section>
 
       <Section title="Main Contact">

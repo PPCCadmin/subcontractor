@@ -67,6 +67,11 @@ export default function AddSubModal({ existingSubs, businessUnits = [], onClose,
             </div>
           )}
 
+          <div className="visibility-box">
+            <div className="visibility-title">Who can see this subcontractor?</div>
+            <VisibilityPicker units={businessUnits} value={visibleUnits} onChange={setVisibleUnits} />
+          </div>
+
           <div className="field"><label>Address</label><input value={form.address} onChange={event => set('address', event.target.value)} /></div>
           <div className="field-row field-row-three">
             <div className="field"><label>City</label><input value={form.city} onChange={event => set('city', event.target.value)} onBlur={checkDuplicate} /></div>
@@ -100,10 +105,6 @@ export default function AddSubModal({ existingSubs, businessUnits = [], onClose,
           <div className="field"><label>Status</label><select value={form.status} onChange={event => set('status', event.target.value)}>{STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></div>
           <div className="field"><label>W-9 on File</label><select value={form.w9OnFile ? 'yes' : 'no'} onChange={event => set('w9OnFile', event.target.value === 'yes')}><option value="no">No</option><option value="yes">Yes</option></select></div>
           <div className="field"><label>Notes</label><textarea value={form.notes} onChange={event => set('notes', event.target.value)} /></div>
-          <div className="field">
-            <label>Who can see this subcontractor</label>
-            <VisibilityPicker units={businessUnits} value={visibleUnits} onChange={setVisibleUnits} />
-          </div>
         </div>
 
         <div className="modal-footer">
